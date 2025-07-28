@@ -1,0 +1,1316 @@
+---
+title: "Estimation of the Degree of Decomposition of Peat from Mid Infrared Spectra and an Evaluation of Existing Decomposition Indicators"
+# subtitle: Do you have a subtitle? If so, write it here
+# titlerunning: Short form of title (if too long for head)
+# authorrunning: Short form of author list if too long for running head
+authors:
+  - name: Henning Teickner
+    affil: '1,2,*'
+    email:
+  - name: Julien Arsenault
+    affil: '3'
+    email:
+  - name: Mariusz Gałka
+    affil: '4'
+    email:    
+  - name: Klaus-Holger Knorr
+    affil: '1'
+    email:
+#  - name: Alice Author
+#    affil: "1,**"
+#    email: alice@doe.com
+#  - name: Bob Author
+#    affil: "1,**"
+#    email: bob@doe.com
+#  - name: Christine Author
+#    affil: "1,2"
+#    email: christine@doe.com
+#  - name: Derek Author
+#    affil: "2,*"
+#    email: derek@doe.com
+#
+affiliations:
+  - number: 1
+    text: "Ecohydrology & Biogeochemistry Group, Institute of Landscape Ecology, University of Münster, 48149, Germany"
+  - number: 2
+    text: "Spatiotemporal Modelling Lab, Institute for Geoinformatics, University of Münster, 48149, Germany"
+  - number: 3
+    text: "Département de Géographie, Université de Montréal, Montréal, H2V 0B3, Canada"
+  - number: 4
+    text: "University of Lodz, Faculty of Biology and Environmental Protection, Department of Biogeography, Paleoecology and Nature Conservation, Banacha 1/3, 90-237 Łodz, Poland"
+#  - number: "**"
+#    text: "these authors contributed equally to this work"
+  - number: "*"
+    text: "corresponding author(s): Henning Teickner (henning.teickner@uni-muenster.de)"
+#
+keywords:
+- key
+- dictionary
+- word
+
+#PACS: 
+#- PAC1
+#- superPAC
+
+bibliography: '`r targets::tar_read(dd_references_file)`'
+#biblio-style: "naturemag-doi"
+# bibstyle options spbasic(default), spphys, spmpsci
+csl: copernicus-publications.csl
+output: 
+  bookdown::pdf_document2:
+    toc: false
+    keep_tex: true
+    number_sections: true
+    latex_engine: xelatex
+    pandoc_args:
+      - --lua-filter=lua/scholarly-metadata.lua
+      - --lua-filter=lua/author-info-blocks.lua
+      - --lua-filter=lua/pagebreak.lua
+fontsize: 12pt
+link-citations: true
+header-includes:
+  - \usepackage{float}
+  - \usepackage{booktabs}
+  - \usepackage{multirow}
+  - \usepackage[modulo]{lineno}
+  - \linenumbers
+  - \usepackage{xr} \externaldocument[si-]{dd-supporting-info}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, eval = TRUE, fig.align='center', fig.pos = 'H')
+```
+
+```{r packages, include=FALSE}
+library(knitr)
+library(kableExtra)
+library(pmird)
+library(targets)
+library(magrittr)
+library(bib2df)
+library(RMariaDB)
+```
+
+
+```{r}
+targets::tar_source()
+tar_load(dd_supporting_info)
+targets::tar_load(dd_model_info)
+targets::tar_load(dd_data_model)
+targets::tar_load(dd_data_pmird_peat_cores_yhat)
+dd_data_pmird_peat_cores_yhat <- purrr::map(dd_data_pmird_peat_cores_yhat, readRDS_rvars)
+tar_load(dd_citations_data)
+tar_load(dd_stan_1_mcmc_settings)
+tar_load(dd_stan_1_kfold_comparison)
+tar_load(dd_stan_1_kfold_2_comparison)
+tar_load(dd_data_model_evaluation_1)
+tar_load(dd_stan_1_fit_mcse)
+tar_load(dd_stan_1_fit_rhat)
+tar_load(dd_data_pmird_mineral)
+targets::tar_load(dd_data_pmird_peat_cores_irpeat)
+dd_reconstruction_initial_mass_rate_1 <- readRDS_rvars(tar_read(dd_reconstruction_initial_mass_rate_1))
+tar_load(dd_plot_19_1)
+tar_load(dd_data_bona2018_moss_npp)
+tar_load(dd_data_bona2018_moss_npp_summary_1)
+tar_load(dd_data_bengtsson2021_moss_npp_summary_1)
+targets::tar_load(dd_simulation_1)
+targets::tar_load(dd_simulation_2)
+targets::tar_load(dd_simulation_3)
+tar_load(dd_simulation_3_species)
+```
+
+
+
+```{r, results='asis'}
+cat(dd_make_author_list(rmarkdown::metadata$authors))
+cat("  \n")
+cat("  \n")
+cat(dd_make_affiliation_list(rmarkdown::metadata$affiliations))
+```
+
+
+# Introduction
+
+```{r}
+f_ash <- function(c0, ct) {
+  1 - c0/ct
+}
+
+f_ash_ct <- function(c0, gamma) {
+  c0 / (1 - gamma)
+}
+
+d_ash <-
+  tidyr::expand_grid(
+    c0 = c(0.25, 1.03)/100,
+    c0_assumed = c(0.25, 1.03)/100,
+    gamma = 
+      c(0, 0.1, 0.5, seq(0, 0.999, length.out = 20)) |>
+      unique()
+  ) |>
+  dplyr::mutate(
+    ct = f_ash_ct(c0 = c0, gamma = gamma),
+    gamma_ash = f_ash(c0 = c0_assumed, ct = ct),
+    gamma_ash =
+      dplyr::case_when(
+        gamma_ash < 0 ~ 0,
+        TRUE ~ gamma_ash
+      ),
+    gamma_error = gamma - gamma_ash
+  )
+```
+
+Peatland mass and carbon balance are the net result of net primary production (NPP) as mass input and of decomposition as mass output. If we could accurately describe how decomposition is controlled by environmental conditions, we could improve reconstructions of past and predictions of future peatland dynamics.  
+Theory and modeling studies suggest a complex feedback between decomposition and net peat accumulation [@Bauer.2004; @Belyea.2006; @Mahdiyasa.2022]. As a direct effect, decomposition decreases net peat accumulation because mass is lost from the system, but as an indirect effect, this mass loss decreases peat height, porosity, and hydraulic conductivity, which can increase surface wetness and therefore may increase litter production and decrease decomposition over longer time periods. Under some conditions, more decomposition can therefore increase future net peat accumulation [e.g., @Quillet.2013].  
+When analyzing decomposition processes, an important quantity is the degree of decomposition ($\gamma$), the fraction of initial mass that was lost due to decomposition. It is directly measured in litterbag experiments and allows to estimate decomposition rates and how they are controlled by environmental conditions. Peatland models use these estimates to simulate decomposition in peatlands for decades to millenia [e.g., @Frolking.2010]. However, litterbag experiments only cover short time periods which leads to imprecise estimates for parameters that take effect only over longer time periods, such as the slow-down of decomposition due to increasing recalcitrance of the material left behind [@Frolking.2001]. Estimates for $\gamma$ of peat are also useful to disentangle peat accumulation scenarios: an unfortunate consequence of the ecohydrological feedback is that both small and large water table depths (WTD) may lead to very similar peat heights and masses, two variables often used to test peatland models, but litter production, decomposition losses, the net mass balance, and the peat degree of decomposition differ between these contrasting scenarios [@Ramirez.2023]. For this reason, estimates of $\gamma$ for peat samples would be useful to distinguish between these conditions and to obtain more accurate estimates for processes rates [@Ramirez.2023].   
+One of the currently most promising methods to estimate $\gamma$ is the ash residue method ($\gamma_\text{ARM}$) [e.g., @Leifeld.2011a; @Leifeld.2011]. This approach assumes that the total mass of ash or some other compound, for example titanium (Ti), does not change during decomposition because the compound is inert. Because of decomposition mass losses of the organic matter, the concentration of ash increases and the degree of decomposition is therefore proportional to the ratio of the ash concentration in the undecomposed sample to the ash concentration in the decomposed sample ($\gamma(t) = \gamma_\text{ARM}(t) = 1 - \frac{c_\text{ash}(t_0)}{c_\text{ash}(t)}$). The limitation of this method is that currently no reliable method exists to estimate the initial ash or Ti concentration of a peat sample [@Leifeld.2011; @Kruger.2016]. For example, for the ombrotrophic peat cores in @Kruger.2016, $c_\text{ash}(t_0)$ may range between `r d_ash |> dplyr::pull(c0) |> magrittr::divide_by(100) |> range() |> units::set_units(g/g) |> units::set_units(mg/g) |> units::drop_units() |> knitr::combine_words(and = " to at least ")` mg g$^{-1}$ for many peat layers; this leads to no errors when only ash is left ($\gamma = 1$), but errors quickly increase with decreasing $\gamma$: for $\gamma = 0.5$, the error is up to `r d_ash |> dplyr::filter(gamma == 0.5) |> dplyr::pull(gamma_error) |> abs() |> max() |> magrittr::multiply_by(100) |> round(0)`%, for $\gamma = 0.1$, the error is up to `r d_ash |> dplyr::filter(gamma == 0.1) |> dplyr::pull(gamma_error) |> abs() |> max() |> magrittr::multiply_by(100) |> round(0)`%. Thus, $\gamma_\text{ARM}$ has comparatively large errors, especially for less decomposed peat, and these errors make it difficult to use $\gamma_\text{ARM}$ in peatland models. To our knowledge, no other approach to estimate the degree of decomposition of peat on an absolute scale exists.  
+Other approaches only estimate relative differences in the degree of decomposition between samples [@Biester.2014], with peat properties that are assumed to be correlated with the degree of decomposition (decomposition indicators). A problem in the application of decomposition indicators we know of is that, the exact relation to the degree of decomposition (monotonous, linear, nonlinear, etc.) is unknown, confounding variables are known to weaken or to reverse the relation to the degree of decomposition, or worse, potential confounders are unknown, and values of the decomposition indicators may be highly variable already for undecomposed peat because of differences in litter chemistry. For example, the C/N ratio is different for undecomposed litter of different species [e.g., @Biester.2014; @Scheffer.2001; @Limpens.2003] and therefore vegetation shifts in a peat core can reverse the relation between the C/N ratio and the degree of decomposition; bulk density depends in a complex way on compaction processes and structural properties of organic matter from different vegetation species [e.g., @Mahdiyasa.2022] and also depends on mineral contents; humification indices fail when the fraction of minerals is too high [e.g., @Broder.2012] or changes in amide abundances are not caused by decomposition but for example vegetation shifts [@Stuart.2004; @Teickner.2022f]. Such error sources are difficult to take into account in peatland models and it would therefore be more promising to develop a decomposition indicator that estimates $\gamma$ on an absolute scale. As a first step, existing decomposition indicators could be related to $\gamma$ measured in litterbag experiments to better understand how they relate to $\gamma$, but such tests are for example not included in recent reviews of decomposition indicators [@Biester.2014; @Zaccone.2018]. In summary, it is poorly understood how much decomposition indicators vary for undecomposed litter between species and how decomposition indicators relate to $\gamma$.  
+To address the problems to measure $\gamma$, we suggest to first define properties of an ideal decomposition indicator and then to develop a decomposition indicator that has these properties. An ideal decomposition indicator is linearly related to the degree of decomposition, well tested against litterbag data, does not confound differences in litter chemistry of undecomposed litter with decomposition, and is robust against other potential confounding factors, in particular mineral contents. A model that predicts $\gamma$ measured from litterbag experiments and undecomposed litter with mid infrared spectra (MIRS) may fulfill these requirements because MIRS from litterbag experiments contain information about the relative abundance and interactions of many molecular structures [@Stuart.2004] which change in abundance during decomposition and differ between plant species [e.g., @Arsenault.2024a; @Chapman.2001; @Cocozza.2003; @Tfaily.2014]. In contrast to other decomposition indicators that use simple formulas and no training data, such as C/N or humification indices, using a statistical model and undecomposed litter from various species as reference should avoid confounding differences in the chemistry of undecomposed litter with differences in chemistry due to decomposition. In contrast to $\gamma_\text{ARM}$, no knowledge of initial states is required because $\gamma$ is predicted only with information from the decomposed sample. Previous studies used MIRS to predict various peat properties [e.g., @Artz.2008; @Chapman.2001], but, to our knowledge, not the degree of decomposition. It would therefore be useful to develop a model that predicts $\gamma$ measured in litterbag experiments from MIRS ($\gamma_\text{MIRS}$).  
+An error source that received surprisingly little attention in the literature is the underestimation of $\gamma$ for samples with multiple components by many decomposition indicators except for those similar to $\gamma_\text{ARM}$. With $\gamma_\text{ARM}$, it is possible to estimate $\gamma$ of a peat sample consisting of multiple components (multi-component system) in exactly the same way as $\gamma$ for an individual component because each component contributes some ash mass that is always the same, no matter how decomposed the component is or how much other components contribute to the peat sample; the signal changes linearly when new components are added to the system. In contrast, other decomposition indicators (e.g. C/N, bulk density) measure a signal that depends on the degree of decomposition and therefore change non-linearly when a new component is added to the system. As a consequence, components with larger degree of decomposition contribute less to the measured signal of the system relative to their initial mass than components with smaller degree of decomposition: $\gamma$ will be underestimated. This is also the case for $\gamma_\text{MIRS}$ because more decomposed components contribute less to the MIRS signal relative to their initial mass than less decomposed components.<!--Thus, while $\gamma$ of a multi-component system is a weighted average of the degree of decomposition of its components, where weights are the initial masses of the components, $\gamma_\text{MIRS}$ of a multi-component system is a weighted average of the degree of decomposition of its components, where weights are the masses of the components at the time of sampling. It is important to note that this limitation is not exclusive to $\gamma_\text{MIRS}$, but applies to all decomposition indicators that aim to measure $\gamma$ on an absolute scale or interval scale and do not have the property of $\gamma_\text{ARM}$ that the measured signal (the mass of ash) changes linearly when new components are added to a sample.--> Reviews on peat decomposition indicators [@Biester.2014; @Zaccone.2018] do no mention this bias.  
+There are two options to avoid this bias and estimate $\gamma$ for multi-component systems with $\gamma_\text{MIRS}$ or other decomposition indicators other than $\gamma_\text{ARM}$: Firstly, if it is possible to measure $\gamma_\text{MIRS}$ and the mass of each component and if $\gamma_\text{MIRS}$ is a good estimate for $\gamma$ for each component, then one can estimate the initial mass of each component and compute an unbiased estimate for $\gamma$. Secondly, one can estimate $\gamma$ with $\gamma_\text{MIRS}$ measured on the bulk sample for conditions where an error analysis indicates only small effect of the bias; this requires to identify conditions under which the bias is small.  
+Even when the bias of $\gamma_\text{MIRS}$ for a multi-component system is not corrected, $\gamma_\text{MIRS}$ is still a useful decomposition indicator. It is useful to improve peatland models because peatland models can predict the degree of decomposition weighted by the components masses and this biased degree of decomposition is directly comparable to $\gamma_\text{MIRS}$. A component-specific analysis offers even more opportunities for peatland models. In contrast, existing approaches, for instance using the C/N ratio [e.g., @Ramirez.2023], may have larger errors because, in addition to the bias, which is also a limitation of C/N, and C dynamics, also N dynamics have to be modeled for different plant functional types. $\gamma_\text{MIRS}$ is also useful in peat core analyses: Without any correction, $\gamma_\text{MIRS}$ is the largest possible degree of decomposition of the least decomposed component (since an average cannot be larger than all individual values) and the smallest possible degree of decomposition of the most decomposed component (since an average cannot be smaller than all individual values). Also here, a component-specific offers many more possibilities.  
+Thus, $\gamma_\text{MIRS}$ has potential advantages compared to existing decomposition indicators that are summarized in Tab. \@ref(tab:dd-table-1). We expect that an analysis of $\gamma_\text{MIRS}$ for each component of a peat sample (component-specific analysis) is particularly useful because this offers the opportunity to correct the bias and provides much more information useful to improve peatland models. Moreover, a component-specific analysis also allows to reconstruct past NPP without a process model and to use peat samples to analyze decomposition processes in the same way as litterbag experiments, but over long time scales.
+<!--One advantage is the possibility to estimate $\gamma$ on an absolute scale, which is, to our knowledge, otherwise only possible with the $\gamma_\text{ARM}$. For one-component systems, $\gamma_\text{MIRS}$ has the advantage that no assumptions on properties of undecomposed samples have to be made, whereas $\gamma_\text{ARM}$ can have large errors when initial ash concentrations are not estimated correctly. For multi-component systems, $\gamma_\text{ARM}$ can be applied in the same way as for one-component systems, whereas $\gamma_\text{MIRS}$ underestimates $\gamma$. However, $\gamma_\text{MIRS}$ is unbiased in a component-specific analysis if it is unbiased for the individual components. Peatland models can be tested against $\gamma_\text{MIRS}$ because they can consider the bias in $\gamma_\text{MIRS}$ and this may help to more accurately estimate past process rates. For bulk peat, when not correcting the bias, $\gamma_\text{MIRS}$ is the largest possible degree of decomposition of the least decomposed component and the smallest possible degree of decomposition of the most decomposed component. We expect that an analysis of $\gamma_\text{MIRS}$ for each component of a peat sample (component-specific analysis) is particularly useful because this can test peatland models even in more detail, the bias can be corrected, and data from peat cores may be used in the same way as litterbag experiments, which would allow a direct analysis of decomposition processes in peatlands over long time scales and also a direct way to estimate past net primary production, which is to date not possible.--> 
+
+
+(ref:dd-table-1-caption) Desired properties of an ideal decomposition indicator and how existing decomposition indicators and $\gamma_\text{MIRS}$ fulfill them. "One" and "Multi" distinguished application to systems with one or multiple components. "$\gamma_\text{MIRS}$ (theory)" are the properties deducible for $\gamma_\text{MIRS}$ from theory and "$\gamma_\text{MIRS}$ (this study)" is our contribution here.
+
+```{r dd-table-1, tab.cap='(ref:dd-table-1-caption)', warning=FALSE, message=FALSE}
+tibble::tibble(
+  variable = c("$\\gamma_\\text{ARM}^*$", "Qualitative decomposition indicators\\textsuperscript{\\textdagger}", "$\\gamma_\\text{MIRS}$ (theory)", "$\\gamma_\\text{MIRS}$ (this study)"),
+  property = list(c("Measures $\\gamma$ on an absolute scale", "Is linearly related to $\\gamma$", "Does not confound differences in litter chemistry with decomposition", "Does not confound differences in mineral content with decomposition", "Does not require assumptions on initial conditions"))
+) |>
+  tidyr::unnest("property") |>
+  dplyr::mutate(
+    one_component = c(c("yes", "yes", "yes", "yes", "no"), c("no", "no/?", "no/?", "partly", "yes"), c("yes", "yes", "?", "?", "yes"), c("yes", "yes", "yes", "yes$^2$", "yes")),
+    multiple_component = c(c("yes", "yes", "yes", "yes", "no"), c("no", "no", "no/?", "partly", "yes"), c("yes", "no$^1$", "?", "?", "yes"), c("yes", "no$^1$", "yes", "yes$^2$", "yes"))
+  ) |>
+  tidyr::nest(system = c("one_component", "multiple_component")) |>
+  tidyr::pivot_wider(
+    names_from = "variable",
+    values_from = "system"
+  ) |>
+  tidyr::unnest(dplyr::everything(), names_repair = "universal") |>
+  kableExtra::kable(
+    format = "latex",
+    booktabs = TRUE, 
+    longtable = FALSE,
+    escape = FALSE, 
+    row.names = FALSE,
+    col.names = c("Desired property", rep(c("One", "Multi"), 4L))
+  ) |>
+  kableExtra::footnote(
+    number = 
+      c(
+        "With component-specific analysis: yes.",
+        "Increased prediction errors for samples with large mineral contents."
+      ),
+    symbol = 
+      c(
+        "And similar decomposition indicators with inert compound, e.g., Ti residue method.",
+        "Are not used to measure an absolute degree of decomposition."
+        )
+    ) |>
+  add_header_above(c(" " = 1, "$\\\\gamma_\\\\text{ARM}^*$" = 2, "Qualitative decomposition indicators\\\\textsuperscript{\\\\textdagger}" = 2, "$\\\\gamma_\\\\text{MIRS}$ (theory)" = 2, "$\\\\gamma_\\\\text{MIRS}$ (this study)" = 2), escape = FALSE) |>
+  kableExtra::kable_styling(latex_options = c("scale_down", "HOLD_position")) |>
+  kableExtra::column_spec(c(2:9), width = "4em")
+```
+
+These advantages depend on how accurate predictions of $\gamma_\text{MIRS}$ for individual components (litter types) will be. It is therefore relevant to develop and evaluate a prediction model for $\gamma_\text{MIRS}$ and analyze in more detail how estimates for $\gamma$ by $\gamma_\text{MIRS}$ or other decomposition indicators are biased in multi-component systems. Specifically, our study has the following aims:
+
+1. We develop and evaluate models to predict the degree of decomposition of individual components of a peat sample from MIRS with data from available litterbag experiments and undecomposed litter samples.
+
+2. We explore how well other commonly used decomposition indicators relate to the degree of decomposition as measured in litter samples and how much they confound differences in litter properties of undecomposed litter with decomposition mass losses.
+
+3. We estimate how much $\gamma_\text{MIRS}$ and the other decomposition indicators underestimate $\gamma$ for peat samples with two or more components and under what conditions $\gamma_\text{MIRS}$ is a good approximation for $\gamma$ and can be used to reconstruct past NPP with small error. 
+
+4. Based on this analysis, we estimate $\gamma$ and reconstruct the NPP of *Sphagnum* species in peat samples from two peat cores using $\gamma_\text{MIRS}$. In addition, we discuss how $\gamma_\text{MIRS}$ may be useful to analyze long-term peat decomposition. 
+
+
+
+
+
+
+
+
+
+<!--
+Despite these limitations, $\gamma_\text{MIRS}$ is useful for the following reasons:
+
+1. 
+
+In summary, if it is possible to develop accurate MIRS prediction models for 
+
+
+While $\gamma_\text{MIRS}$ shares this critical limitation with other decomposition indicators and the ash residue method does not have this limitation, $\gamma_\text{MIRS}$ can still be useful because (1) it may still be an ideal decomposition indicator for one-component systems, in contrast to other decomposition indicators we are aware of, (1) it is the maximum possible degree of decomposition of the least decomposed component in a peat sample and the minimum possible degree of decomposition of the most decomposed component in a peat sample  
+
+
+
+
+
+
+Thus, the degree of decomposition of peat at time $t$:
+
+\begin{equation}
+\begin{aligned}
+\gamma(t) &=& 1 - \frac{m(t)}{m(t_0)} &=& \frac{\sum_i^n m_i(t_0) \gamma_i(t)}{\sum_i^n m_i(t_0)},
+(\#eq:eq-dd-gamma-bias-1)
+\end{aligned}
+\end{equation} 
+
+where $m(t)$ is the mass of the sample at time $t$, $m(t_0)$ the mass of the undecomposed sample, $m_i(t_0)$ the mass of the undecomposed component $i$, and $\gamma_i(t)$ the degree of decomposition of component $i$. However, what $\gamma_\text{MIRS}$, C/N, or humification indices measure, is:
+
+\begin{equation}
+\begin{aligned}
+r(t) &=& \frac{\sum_i^n m_i(t) r_i(t)}{\sum_i^n m_i(t)},
+(\#eq:eq-dd-gamma-bias-2)
+\end{aligned}
+\end{equation} 
+
+where $r(t)$ is the value of the decomposition indicator for the peat sample and $r_i(t)$ for component $i$. If $\gamma_\text{MIRS}$ predicts $\gamma$ accurately for individual components, then the relation between $\gamma_\text{MIRS}(t)$ of a multi-component system and $\gamma(t)$ is a function of $\gamma_i(t)$ and $\gamma(t)$:
+
+$$
+\gamma_\text{MIRS}(t) - \gamma(t) = \frac{\sum_i^n m_i(t) \gamma_{\text{MIRS},i}(t)}{m(t)} - \frac{\sum_i^n m_i(t_0) \gamma_i(t)}{m(t_0)} = \frac{\sum_i^n m_i(t) \gamma_i(t)}{m(t)} + (\gamma(t) - 1)
+$$
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+decomposition indicators that measure organic matter properties may underestimate $\gamma$ when they are computed for a multi-component system in the same way as for an individual component. This is because 
+
+
+As described above, a MIRS-predicted degree of decomposition may be a good approximation of an ideal decomposition indicator for litterbag experiments. 
+
+An advantage of the ash residue method is that $\gamma$ of a peat sample consisting of multiple components with different degree of decomposition can be computed in exactly the same way as $\gamma$ for an individual component   
+
+
+
+Accurate prediction of the degree of decomposition for individual litter types is not sufficient to accurately predict the degree of decomposition of peat samples consisting of multiple components (multi-component systems) because the degree of decomposition of a multi-component system ($\gamma(t)$) is a weighted average of the degree of decomposition of the components ($\gamma_i(t)$), where weights are the masses of the components before decomposition ($m_i(t_0)$):
+
+\begin{equation}
+\begin{aligned}
+\gamma(t) &=& 1 - \frac{m(t)}{m(t_0)} &=& \frac{\sum_i^n m_i(t_0) \gamma_i(t_0)}{\sum_i^n m_i(t_0)}
+(\#eq:eq-dd-gamma-bias-3)
+\end{aligned}
+\end{equation} 
+
+
+
+
+An advantage of the ash residue method is that information on the degree of decomposition is preserved, even when the sample consists of more than one component that decompose at different rates (multi-component system), because only the inert ash or Ti component is relevant to estimate $\gamma$.
+-->
+
+
+<!--The ash residue method fulfills many of the properties of an ideal decomposition indicator, except that not knowing the initial concentration of ash or Ti is a large error source, as outlined above. --><!--An advantage of the ash residue method is that information on the degree of decomposition is preserved, even when the sample consists of more than one component that decompose at different rates (multi-component system), because only the inert ash or Ti component is relevant to estimate $\gamma$. It can be shown that other decomposition indicators, even if it is an ideal decomposition indicator, underestimate $\gamma$ for multi-component systems, if the decomposition indicator depends on the contribution of the individual components to the system. For the ash residue method and an ideal decomposition indicator, the degree of decomposition of one component can be calculated as:
+
+\begin{equation}
+\begin{aligned}
+\gamma_i(t) &=& 1 - \frac{c_{\text{ash},i}(t_0)}{c_{\text{ash},i}(t)}\\
+\gamma_i(t) &=& r_{\text{ideal},i}(t),
+\end{aligned}
+(\#eq:eq-dd-gamma-bias-1)
+\end{equation}
+
+where $c_{\text{ash},i}(t_0)$ is the concentration of ash in the undecomposed component $i$,  $c_{\text{ash},i}(t)$ is the concentration of ash in component $i$ at time $t$, and $r_{\text{ideal},i}(t) = \gamma_i(t)$, since $r_{\text{ideal},i}(t)$ is the ideal decomposition indicator. The degree of decomposition of a peat sample consisting of $n$ components is the weighted average of the degree of decomposition of each component, where weights are the initial masses of the components:
+
+\begin{equation}
+\begin{aligned}
+\gamma(t) &=& \frac{\sum_i^n m_i(t_0) \gamma_i(t_0)}{\sum_i^n m_i(t_0)} &=& 1 - \frac{\sum_i^n m_i(t)}{\sum_i^n m_i(t_0)} &=& 1 - \frac{m(t)}{m(t_0)},\\
+(\#eq:eq-dd-gamma-bias-3)
+\end{aligned}
+\end{equation} 
+
+$\gamma_i(t)$ is the degree of decomposition of the component at time $t$, $m_i(t)$ is the mass of the component at time $t$, and $m_i(t_0)$ is the mass of the undecomposed component. Since mass conservation (of ash) holds for the system as for each component ($m_{\text{ash}}(t) = m_{\text{ash}}(t_0) \iff c_{\text{ash}}(t) m(t) = c_{\text{ash}}(t_0) m(t_0)$), the ash residue method can compute $\gamma(t)$ from the measured $c_{\text{ash}}(t)$ and a known $c_{\text{ash}}(t_0)$ in the same way as for an individual component.   
+
+For residual ash method, mass conservation gives:
+
+$$
+\begin{aligned}
+&& r(t) &=& \sum_i^n r_i(t) = \sum_i^n c_i(t) m_i(t)\\
+&\iff& \frac{m(t)}{m(t_0)} &=& \sum_i^n \left( c_i(t) m_i(t) \right) \frac{m(t)}{r(t) m(t_0)}\\
+&\iff& 1 - \frac{m(t)}{m(t_0)} &=& 1 - \frac{r(t) m(t)}{r(t) m(t_0)}  &=& 1 - \frac{c(t_0)}{c(t)}
+\end{aligned}
+$$
+
+For $\gamma_\text{MIRS}$:
+
+$$
+\begin{aligned}
+&& \gamma_\text{MIRS}(t) &=& \sum_i^n \left( \gamma_{\text{MIRS},i}(t) \frac{m_i(t)}{m(t)} \right)\\
+&\iff& 1 - \frac{m(t)}{m(t_0)} &=&  1 - \frac{\sum_i^n \left( \gamma_{\text{MIRS},i}(t) m_i(t) \right)}{m(t_0) \gamma_\text{MIRS}(t)}\\
+&\iff& \gamma(t) &=&  1 - \frac{(1 - \gamma(t)) \sum_i^n \left( \gamma_{\text{MIRS},i}(t) m_i(t) \right)}{m(t) \gamma_\text{MIRS}(t)}\\
+&\iff& \gamma(t) &=&  1 - \frac{\sum_i^n \left( \gamma_{\text{MIRS},i}(t) m_i(t) \right)}{m(t) \gamma_\text{MIRS}(t)} + \frac{\gamma(t) \sum_i^n \left( \gamma_{\text{MIRS},i}(t) m_i(t) \right)}{m(t) \gamma_\text{MIRS}(t)}\\
+\end{aligned}
+$$
+
+
+
+
+
+A general formula for the value of a decomposition indicator $r$ for component $i$ at time $t$ is:
+
+\begin{equation}
+\begin{aligned}
+r_i(t) &=& (r_i(t_0) + f_i(\gamma_i(t))) \beta_{1,i} \frac{m_i(t)}{m_i(t_0)}\\ 
+&=& (r_i(t_0) + f_i(\gamma_i(t))) \beta_{1,i} (1 - \gamma_i(t)),
+\end{aligned}
+(\#eq:eq-dd-gamma-bias-1)
+\end{equation}
+
+where $r_i(t_0)$ is the value of the decomposition indicator for the undecomposed component, $\gamma_i(t)$ is the degree of decomposition of the component at time $t$, $m_i(t)$ is the mass of the component at time $t$, $m_i(t_0)$ is the mass of the undecomposed component, $\frac{m_i(t)}{m_i(t_0)}$ is the remaining fraction of the initial mass of the component, $\beta_{1,i}$ defines how $r_i$ depends on the fraction of initial mass remaining, and $f_i(\gamma_i(t))$ is a function that describes how $r_i$ depends on the degree of decomposition. 
+
+For the ash residue method and an ideal decomposition indicator (such as the MIRS-predicted degree of decomposition when the model has small prediction errors), $f(\gamma_i(t)) = \beta_{2,i} \gamma_i(t)$, where $\beta_{2,i}$ is some constant. Then, we can solve above equation to obtain $\gamma_i(t)$ as a function of the decomposition indicator. For example, for the ash residue method (using $r_i(t_0) = m_i(t_0) c_{\text{ash},i}(t_0) = m_i(t) c_{\text{ash},i}(t) = t_i(t)$, where $c_{\text{ash},i}(t)$ is the concentration of ash in component $i$ at time $t$) and an ideal decomposition indicator, one can obtain:
+
+\begin{equation}
+\begin{aligned}
+\gamma_i(t) &=& 1 - \frac{c_{\text{ash},i}(t_0)}{c_{\text{ash},i}(t)}\\
+\gamma_i(t) &=& r_{\text{ideal},i}(t),
+\end{aligned}
+(\#eq:eq-dd-gamma-bias-2)
+\end{equation}
+
+where $r_{\text{ideal},i}(t) = \gamma_i(t)$, since $r_{\text{ideal},i}(t)$ is the ideal decomposition indicator. The degree of decomposition of a peat sample consisting of $n$ components is the weighted average of the degree of decomposition of each component, where weights are the initial masses of the components:
+
+\begin{equation}
+\begin{aligned}
+\gamma(t) &=& \frac{\sum_i^n m_i(t_0) \gamma_i(t_0)}{\sum_i^n m_i(t_0)} &=& 1 - \frac{\sum_i^n m_i(t)}{\sum_i^n m_i(t_0)}\\
+(\#eq:eq-dd-gamma-bias-3)
+\end{aligned}
+\end{equation}-->  
+<!--\gamma(t) &=& \frac{\sum_i^n m_i(t_0) \left(1 - \frac{r_i(t)}{(r_i(t_0) + \beta_{2,i} \gamma_i(t)) \beta_{1,i}}\right)}{\sum_i^n m_i(t_0)}\\-->
+
+<!--For the ash residue method, since we can measure the ash concentration of the system, we can directly compute $\gamma(t)$:
+
+\begin{equation}
+\begin{aligned}
+\gamma(t) &=& 1 - \frac{c_{\text{ash}}(t_0)}{c_{\text{ash}}(t)}
+\end{aligned}
+(\#eq:eq-dd-gamma-bias-4)
+\end{equation}
+
+
+
+<!--
+$$
+r_i(t) = (r_i(t_0) + \beta_{2,i} \gamma_i(t)) \beta_{1,i} (1 - \gamma_i(t))\\
+\gamma_i(t) = \begin{cases}
+1 - \frac{r_i(t)}{r_i(t_0) \beta_{1,i}} &\text{if}& \beta_{2,i} = 0\\
+\frac{\frac{-(r_i(t_0) - \beta_{2,i})}{\beta_{2,i}} \pm \sqrt{\left( \frac{r_i(t_0) - \beta_{2,i}}{\beta_{2,i}} \right)^2 + \frac{4 (r_i(t) - \beta_{1,i} r_i(t_0))}{\beta_{1,i} \beta_{2,i}}}}{2} &\text{if}& \beta_{2,i} \neq 0\\
+\frac{r_i(t) - r_i(t_0)}{\beta_{2,i}} &\text{if}& \beta_{2,i} \neq 0, \beta_{1,i} = \frac{1}{1 - \gamma_i(t)}\\
+
+\end{cases}
+$$
+-->
+<!--
+```{r}
+f <- function(rt, rt0, beta1, beta2, sign = 1) {
+  
+  a1 <- 1
+  a2 <- (rt0 - beta2)/beta2 
+  a3 <- (rt - beta1 * rt0)/(beta1*beta2)
+  
+  (-a2 + sign * sqrt(a2^2 - 4 * a3)) / (2*a1)
+  
+}
+
+g <- function(gamma, rt0, beta1, beta2) {
+  
+  beta1 * (rt0 + beta2 * gamma) * (1 - gamma)
+  
+}
+
+curve(f(rt = g(gamma = x, rt0 = 0, beta1 = (1 - x), beta2 = 1), rt0 = 0, beta1 = (1 - x), beta2 = 1, sign = -1), from = 0, to = 1)
+```
+
+
+
+
+For the ash residue method, $r_i(t)$ is the mass of ash of component $i$, and for any $i$, $\beta_{2,i} = 0$, $\beta_1 = \frac{1}{(1 - \gamma_i(t))}$, and $r_i(t) = r_i(t_0)$. For an ideal decomposition indicator, for any $i$, $r_i(t) = \gamma_i(t)$, $r_i(t_0) = \gamma_i(t_0) = 0$, $\beta_{2,i} = 1$, and $\beta_1 = \frac{1}{(1 - \gamma_i(t))}$ for all $t \ge t_0$.
+
+
+
+
+
+
+
+
+
+ 
+
+\begin{equation}
+\begin{aligned}
+&& r_{\text{ash},i}(t) &=& r_{\text{ash},i}(t_0)\\
+&\iff& m_i(t) c_{\text{ash},i}(t) &=& m_i(t_0) c_{\text{ash},i}(t_0)\\
+&\iff& \gamma(t) &=& 1 - \frac{m_i(t)}{m_i(t_0)} = 1 - \frac{c_{\text{ash},i}(t_0)}{c_{\text{ash},i}(t)},
+\end{aligned}
+(\#eq:eq-dd-gamma-bias-2)
+\end{equation}
+
+which shows the dependence on the initial ash concentration, $c_{\text{ash},i}(t_0)$. For an ideal decomposition indicator, $r_i(t) = \gamma_i(t)$, $r_i(t_0) = \gamma_i(t_0) = 0$, $\beta_2 = 1$, and $\beta_1 = \frac{1}{(1 - \gamma_i(t))}$ for all $t \ge t_0$:
+
+\begin{equation}
+r_{\text{ideal},i}(t) = \gamma_i(t)
+(\#eq:eq-dd-gamma-bias-3)
+\end{equation}
+
+When we predict $r_i(t) = \gamma_i(t)$ with a spectral model from MIRS ($r_{\text{MIRS},i}(t)$), then $\beta_1 = \frac{1}{(1 - \gamma_i(t))}$ because MIRS are measured with a defined mass of the sample and are normalized in a standardized way during spectral preprocessing and therefore $r_{\text{MIRS},i}(t)$ is independent of how much of the initial mass is left. Therefore:
+
+\begin{equation}
+r_{\text{MIRS},i}(t) = (r_{\text{MIRS},i}(t_0) + f_{\text{MIRS},i}(\gamma_i(t)))
+(\#eq:eq-dd-gamma-bias-4)
+\end{equation}
+
+When we fit a spectral prediction model to litterbag data for component $i$ and this model is a good approximation for the measured degree of decomposition, then $f_{\text{MIRS},i}(\gamma_i(t))$ has the same form as for the ideal decomposition indicator and therefore $r_{\text{MIRS},i}(t) = \gamma_i(t)$.
+
+The degree of decomposition of a peat sample consisting of $n$ components is the initial mass-weighted average of the degree of decomposition of each component:
+
+\begin{equation}
+\gamma(t) = \frac{\sum_i^n m_i(t_0) \gamma_i(t_0)}{\sum_i^n m_i(t_0)}
+(\#eq:eq-dd-gamma-bias-5)
+\end{equation}
+
+For the ash residue method, this is:
+
+\begin{equation}
+\begin{aligned}
+\gamma(t) &=& \frac{\sum_i^n m_i(t_0) \left(1 - \frac{c_{\text{ash},i}(t_0)}{c_{\text{ash},i}(t)} \right)}{\sum_i^n m_i(t_0)}\\
+&=& \frac{\sum_i^n \left(m_i(t_0) - \frac{r_{\text{ash},i}(t_0)}{c_{\text{ash},i}(t)} \right)}{\sum_i^n m_i(t_0)}\\
+&=& 1 - \frac{\sum_i^n \frac{r_{\text{ash},i}(t_0)}{c_{\text{ash},i}(t)}}{m(t_0)}\\
+&=& 1 - \frac{c_\text{ash}(t_0)}{c_\text{ash}(t)},\\
+(\#eq:eq-dd-gamma-bias-6)
+\end{aligned}
+\end{equation}
+
+and therefore the method is unbiased for multi-component systems. For MIRS predicted degree of decomposition, the formula is:
+
+\begin{equation}
+\gamma(t) = \frac{\sum_i^n m_i(t_0) \gamma_{\text{MIRS},i}(t)}{\sum_i^n m_i(t_0)},
+(\#eq:eq-dd-gamma-bias-7)
+\end{equation}
+
+and it is impossible to compute $\gamma(t)$ without $m_i(t_0)$ (or $m_i(t)$ or $\gamma_{\text{MIRS},i}(t)$, from which $m_i(t_0)$ can be computed). The degree of decomposition of the system estimated from MIRS ($\gamma_\text{MIRS}(t)$) is the mass-weighted average of $\gamma_\text{MIRS}(t)$ of the individual components:
+
+\begin{equation}
+\gamma_\text{MIRS}(t) = \frac{\sum_i^n m_i(t) \gamma_{\text{MIRS},i}(t)}{\sum_i^n m_i(t)} = \frac{\sum_i^n m_i(t) \gamma_{\text{MIRS},i}(t)}{m(t_0) (1 - \gamma(t))} 
+(\#eq:eq-dd-gamma-bias-8)
+\end{equation}
+
+
+
+
+
+It is less clear and much more difficult to test whether a MIRS-predicted $\gamma$ ($\gamma_\text{MIRS}$), or other decomposition indicators that rely on organic matter properties, fulfill these properties. The MIRS absorbance caused by a particular molecular structure is proportional to the amount of the molecular structure contained in the components of the sample. As a component gets decomposed, its contribution to the absorbance caused by the molecular structure also decreases, unless the molecular structure gets enriched more relative to the overall mass loss of the component. This may result in $\gamma_\text{MIRS}$ underestimating $\gamma$ in multi-component systems. Testing this confounder can be done either by mixing real litterbag samples, measuring MIRS, and then comparing $\gamma_\text{MIRS}$ to $\gamma$ calculated from the litterbag experiment, or by assuming that MIRS are scaled relative to sample masses, computing mixture spectra of separate litterbag samples, and then comparing $\gamma_\text{MIRS}$ to $\gamma$ calculated from the litterbag experiment. Here, we will use the second approach since it does not require additional litterbag experiments. These estimates can be compared to theoretical calculations where $\gamma_\text{MIRS}$ is a mass-weighted average of $\gamma$ of the individual components. 
+
+
+
+
+This error in $\gamma_\text{MIRS}$ is also relevant when reconstructing past net primary production (NPP) from masses of peat layers. Reconstructing past NPP is required to understand past peatland dynamics and compare contemporary process rates to past conditions. Apart from process models and the ash residue method (or approaches using other decomposition indicators), no other method exists to reconstruct past NPP. The initial mass of a peat sample can be computed from its mass at sampling ($m(t)$) and its degree of decomposition at the same time ($\gamma(t)$) as $\frac{m(t)}{1 - \gamma(t)}$. When the sample only consists of aboveground parts, the reconstructed initial mass is the aboveground NPP during the period the plants that formed the sample grew. Therefore, if $\gamma$ can be estimated accurately, it would also be possible to reconstruct past NPP or initial sample masses. It would be useful to reconstruct the initial mass of the sample using $\gamma_\text{MIRS}(t)$ instead of $\gamma(t)$, but this is a naive approach because $\gamma_\text{MIRS}(t)$ may underestimate $\gamma(t)$, as described above. Conditions under which $\gamma_\text{MIRS}(t)$ can be used to reconstruct past NPP with small errors or under which the errors can be avoided, will need to be elaborated.-->  
+
+<!--The possibility to estimate the degree of decomposition of peat layers offers several applications that address to date unsolved problems. One of these problems is the reconstruction of past net primary production (NPP) from masses of peat layers. However, naive approaches can lead to biased estimates that have to our knowledge not been analyzed yet. A naive reconstruction of past NPP is the result of division of the mass of a peat layer by the fraction of initial mass remaining (one minus the degree of decomposition). This approach does not consider that peat can consist of different fractions (for example litter types) with different degree of decomposition, in which case the NPP will be underestimated, as we will show. To our knowledge, previous studies that reconstructed NPP from bulk density or ash content ratios do not consider this error source and therefore may underestimate initial NPP [e.g., @Leifeld.2011a; @Leifeld.2011]. This underestimation of NPP can be deduced from differences in decomposition rates of layer fractions, for example Clymo's analysis of two-component peat systems [@Clymo.1984]. However, @Clymo.1984 focused on how this shifts macrofossil abundances compared to the original vegetation community and not how this may bias NPP reconstructions. It is thus unclear what errors the naive reconstruction has under different conditions and what approaches avoid them.-->
+
+<!--A second unsolved problem is the estimation of peat decomposition rates. With estimates for the degree of decomposition, a set of dated peat layers can be analyzed similar to a litterbag experiment. Advantages of this idea are that decomposition under natural conditions can be analyzed and that decomposition rates can be analyzed over long time periods. Disadvantages are
+
+
+Since peat can be old, this litterbag "experiment" can span several thousand years and would therefore allow to estimate decomposition rates over time periods previously only assumed to be accessible to modeling studies [e.g., @Bauer.2004]. Similarly to the naive reconstruction of NPP, this approach has flaws which prevent a naive estimation of the decomposition rate, that is to estimate a decomposition rate from a set of dated peat layers with degree of decomposition estimates. We are not aware of studies that list error sources of using sets of peat layers as long-term litterbag experiments and we are also not aware of studies that suggest how these error sources can be avoided and what can be learned from estimates of the degree of decomposition.--> <!--In addition, as described above, knowing the peat degree of decomposition can improve parameter estimates of quite complex peatland models, but it would also be interesting to know what information we can derive with simpler modeling approaches.--> 
+
+
+<!--For example subsequent peat layers can have a decreasing degree of decomposition due to changing environmental conditions that only the older or only the younger layer experienced, or peat layers can have a different initial vegetation composition. Both factors make it impossible to estimate decomposition rates akin to litterbag experiments if bulk layer data are used. However, an advantage of the suggested decomposition indicator is that it can also be measured for a specific fraction of a peat layer
+
+
+Since the fractions stem from the same peat layer, they have experienced the same environmental conditions during decomposition which means   
+
+such as that a series of dated peat layers is only the same as a litterbag experiment when   
+
+
+$$
+x(0) m(0) = x(t) m(t) \implies m(0) = \frac{x(t)}{x(0)} m(t) \implies \frac{x(t)}{x(0)} = \frac{1}{1 - \gamma(t)} \implies \gamma(t) = \frac{\frac{x(t)}{x(0)} - 1}{\frac{x(t)}{x(0)}} = 1 - \frac{x(0)}{x(t)}
+$$
+
+
+to reconstruct past NPP by dividing the mass of a peat sample by the fraction of initial mass remaining (one minus the degree of decomposition; we call this naive reconstruction of NPP). However, even if the true degree of decomposition of a peat sample was known, there are conditions under which this approach biases NPP estimates. To avoid such errors, we present an analysis of error sources when reconstructing NPP from peat masses and the degree of decomposition because we are not aware of studies where such limitations are described. Based on this error analysis, we suggest that under some conditions, NPP of *Sphagnum* can be approximately estimated with the naive approach, where the bias identified in the error analysis is small, and we use these assumptions to estimate the average NPP of several *Sphagnum* species from two peat cores during periods of the Holocene.-->
+
+
+
+<!--3. We analyze errors of a naive reconstruction of NPP from peat layers with known degree of decomposition and discuss approaches that avoid these errors when reconstructing NPP from peat layers with estimated degree of decomposition. -->
+
+<!--Besides testing peatland models, a potential application of a decomposition indicator that directly estimates the degree of decomposition is to reconstruct past NPP by dividing the mass of a peat sample by the fraction of initial mass remaining (one minus the degree of decomposition; we call this naive reconstruction of NPP). However, even if the true degree of decomposition of a peat sample was known, there are conditions under which this approach biases NPP estimates. To avoid such errors, we present an analysis of error sources when reconstructing NPP from peat masses and the degree of decomposition because we are not aware of studies where such limitations are described.--> 
+<!--Based on our error analysis for the naive reconstruction of NPP, we suggest that under some conditions, NPP of *Sphagnum* can be approximately estimated with the naive approach, where the bias identified in the error analysis is small, and we use these assumptions to estimate the average NPP of several *Sphagnum* species from two peat cores during periods of the Holocene. Errors may be avoided entirely by estimating the degree of decomposition for individual litter types in a peat layer by applying the developed prediction models. Moreover, we show that in this case, estimation of differences (or ratios) of litter-specific decomposition rates is possible, or estimation of the slow-down of decomposition rates according to the decomposition model used in the Holocene Peatland Model [@Frolking.2010] when litter-specific decomposition rates under optimal conditions are known.-->  
+
+<!--3. We analyze conditions under which a reconstruction of NPP by dividing a peat mass by the fraction of initial mass remaining (one minus the degree of decomposition) leads to biased results.-->
+
+
+
+<!--Here, we propose a new decomposition indicator based on mid infrared spectra that, in contrast to available decomposition indicators, aims to directly measure the degree of decomposition, is relatively easy to measure, and may be more robust to confounding factors. The idea is to predict the degree of decomposition measured in available litterbag experiments from mid infrared spectra. Molecular bonds absorb infrared radiation at different wavelengths and the fraction of radiation absorbed depends on the abundance of the molecular structure containing the bond and the bonds' electronegativity [@Stuart.2004]. Therefore, MIRS from litterbag experiments contain semi-quantitative information about the relative abundance of molecular structures and their interactions in peat and allow to measure how these change during decomposition. This information can be extrapolated to peat samples. Previous studies used MIRS to predict various peat properties, but, to our knowledge, not the degree of decomposition. Our first aim is to develop and evaluate a model to predict the degree of decomposition from MIRS based on data from available litterbag experiments and undecomposed litter samples.
+
+To this end, we use available data from litterbag experiments and litter with MIRS measured on undecomposed and decomposed litter to compute a prediction model. Available litterbag data include *Sphagnum capillifolium*, *Typha latifolia*, and *Phragmites australis*, and therefore only species with comparatively small aromatic contents. Inclusion of undecomposed litter samples from shrubs and trees avoids too high degree of decomposition estimates in undecomposed peat samples with large aromatic contents. To estimate sensible prediction errors, we use beta regression models and Bayesian inference. To avoid overfitting, we use regularizing horseshoe priors [---todo: check name of prior]. We evaluate our model quantitatively by 10-fold cross-validation (CV) to estimate prediction accuracy on new samples similar to the training data, and qualitatively by analyzing residual patterns, sensitivity to gradual addition of minerals and very decomposed peat, and peat profiles featuring drainage layers on top of undecomposed peat followed by peat formed since rewetting.-->
+
+<!--Since the aim is to apply the model also to new peat samples, but peat samples with known degree of decomposition are not available, a quantitative evaluation is impossible. Instead, we evaluated the model qualitatively with a peat profile from a peatland drained since 100 years and rewetted since 20 years [---todo:check time information], a peat profile from another part of the same peatland that was not restored in that is forested, and with dated peat profiles from mountain peatlands with macrofossil information and z-transformed water table depths reconstructed from testate amoebae (TA-WTD). The suggested decomposition indicator should estimate a larger degree of decomposition for drained parts or preceding drier conditions [---todo: check Morris paper] and a smaller degree of decomposition at the top and in peat formed since rewetting. 
+
+An additional qualitative aspect worth testing is how minerals may bias the suggested decomposition indicators. Minerals can absorb infrared radiation and the resulting peaks dominate over peaks caused by organic matter when mineral contents are too large. It is known that large mineral contents bias humification indices because they assume a large intensity at 1090 cm$^{-1}$ indicates a large content of carbohydrates, even though it can also indicate a large content of silica minerals [---todo:ref]. The suggested decomposition indicator ideally should not have the same problem. To test this, we apply the suggested decomposition indicator to bottom peat layers and a peat profile from a Patagonian peatland with clear ash layers from volcanic eruptions.--> 
+
+<!--Our second aim is to test how well other commonly used decomposition relate to the degree of decomposition in the litter and peat samples. To this end, we correlated the measured degree of decomposition in litterbag experiments or the degree of decomposition predicted from MIRS with decomposition indicators measured for the same samples or also predicted from MIRS: bulk density, C/N, O/C, H/C, $\delta^{13}$C, $\delta^{15}$N, Gibbs free energy of formation ($\Delta$G$_\text{f}^0$), and NOSC. The rationale of each of these decomposition indicators suggests positive correlations between the degree of decomposition and bulk density, $\delta^{13}$C, $\delta^{15}$N, and $\Delta$G$_\text{f}^0$, and negative correlations with C/N, O/C, H/C, and NOSC [---todo:ref]. Our main interest here is to analyze how well commonly used decomposition indicators are related to the degree of decomposition, how much they vary for undecomposed litter, and thus to what degree they confound differences in litter chemistry with decomposition losses.-->
+
+<!--Furthermore, we tested whether the suggested decomposition indicator is compatible with a hypothesis from an earlier study that the electron donating capacity (EDC) of peat is largest for undecomposed shrubs and decreases with decomposition, whereas the electron accepting capacity (EAC) is small for undecomposed litter with small aromatic contents (*Sphagnum*, sedges), larger for undecomposed shrub litter, and, for shrub litter, increases with the degree of decomposition, except in strongly decomposed peat. EAC and EDC are also predicted from MIRS and application of the models is extrapolation, so this comparison is speculative, but still helpful in order to link different theories to explore their relation.-->
+
+
+
+# Methods
+
+## Training data
+
+To estimate and test prediction models, we used the following litterbag data: *Sphagnum capillifolium* (whole plant) and *Typha latifolia* (leaves) samples incubated in bog peat and pools (oxic and anoxic conditions) in Canada [@Arsenault.2024a], and *Phragmites australis* (leaves and rhizomes) grown under different nutrient availability and incubated under anoxic conditions in peat with different nutrient availability [@Reuter.2019; @Reuter.2019a; @Reuter.2020]. In addition, we used undecomposed litter samples (some collected under natural conditions, some grown in laboratory experiments with different nutrient availability) of `r dd_data_model |> dplyr::filter(dd_dataset_label == "pmird_undecomposed_litter") |> dplyr::mutate(taxon_rank_value = paste0("*", taxon_rank_value, "*")) |> dplyr::pull(taxon_rank_value) |> unique() |> sort() |> knitr::combine_words()` from the pmird database [@Teickner.2025c; `r dd_citations_data$pmird_undecomposed_litter_citations |> dplyr::mutate(BIBTEXKEY = paste0("@", BIBTEXKEY)) |> dplyr::arrange(YEAR) |> dplyr::pull(BIBTEXKEY) |> unique() |> paste(collapse = "; ")`] where the taxon was known (i.e., no bulk vegetation samples from the top of cores). For undecomposed litter samples, we assumed a degree of decomposition of 0 %. In total, `r nrow(dd_data_model)` litter samples were available for model training. All MIRS used in this study are measured in transmission mode on Fourier-transform infrared spectrometers (FTIR) as milled samples mixed with potassium bromide into transparent pellets. MIRS were measured on different devices (`r dd_data_model |> dplyr::mutate(measurement_device_first_30char_duplciated = measurement_device |> stringr::str_sub(start = 1L, end = 30L) |> duplicated()) |> dplyr::filter(! measurement_device_first_30char_duplciated & ! is.na(measurement_device)) |> dplyr::pull(measurement_device) |> knitr::combine_words()`).    
+
+## Peat data
+
+Data from peat profiles to evaluate the models qualitatively were derived from the pmird database [`r dd_citations_data$dd_data_pmird_peat_cores_citations |> dplyr::mutate(BIBTEXKEY = paste0("@", BIBTEXKEY)) |> dplyr::arrange(YEAR) |> dplyr::pull(BIBTEXKEY) |> unique() |> paste(collapse = "; ")`]. These are: Two cores from the peatland Venner Moor, a core from the peatland Odersprungmoor (OD2) [@Galka.2022a], a core from the peatland Martinskapelle (MK1) [@Galka.2022], a core from the peatland Mohoş (MH1) [@Diaconu.2020], and three cores from Patagonian peatlands (PBR 1, Sky 1, Sky 2) [@Broder.2012]. Cores from @Galka.2022a, @Galka.2022, and @Diaconu.2020 have macrofossils and can therefore be used to define components of peat samples as litter types (under the assumption that litter from the same species has the same decomposition rate and therefore a similar degree of decomposition as measured by our models).
+
+<!--All cores have MIRS, all cores except from @Broder.2012 have elemental contents, $\delta^{13}$C and $\delta^{15}$N values, cores from the Venner Moor have bulk density measurements, and cores from @Galka.2022a, @Galka.2022, and @Diaconu.2020 have macrofossils [---todo: update these information once the pmird database is updated].-->
+
+## Prediction model development
+
+We used beta regression models to predict the degree of decomposition (the fraction of initial mass lost) from intensities in preprocessed MIRS. To harmonize the spectra, we interpolated them to unit wavenumber resolution and clipped them to the range 600 to 4000 cm$^{-1}$. Depending on the variable and properties of the MIRS, different preprocessing steps may maximize predictive performance. Therefore, we computed models with different preprocessing steps in addition to the harmonization: (1) Baseline correction, signal normal variate (SNV) (model `r dd_model_names(1, dd_model_info)`), (2) First derivative spectra, SNV (model `r dd_model_names(2, dd_model_info)`), (3) Second derivative spectra, SNV (model `r dd_model_names(3, dd_model_info)`). After that, spectra were binned (bin width 10 cm$^{-1}$) to reduce the number of predictors and reduce correlation between predictors, and all predictors were $z$-transformed across all spectra. All preprocessing steps were performed with the ir package [@Teickner.2022i]. Baseline correction was done with an automated convex hull procedure [@Beleites.2021]. Spectra of some undecomposed litter samples have artefacts from CO$_2$, as indicated by peaks around 2360 cm$^{-1}$ [@Wallace.1997a]. To avoid that these peaks have an effect on the normalization or models, we linearly interpolated intensities between 2300 and 2380 cm$^{-1}$ and excluded variables from this range from the models. CO$_2$ also produces peaks around 670 cm$^{-1}$ and 3580 to 3780 cm$^{-1}$, but we did not correct these because they overlap with peaks from organic matter and are smaller than the peaks between 2300 and 2380 cm$^{-1}$ [@Wallace.1997a].   
+Beta regression models were computed with brms [@Burkner.2018], using a logit link function, assuming a constant shape parameter, using a normal prior for the intercept, and regularized horseshoe priors [@Piironen.2017a; @Piironen.2017b] for the slopes (for each predictor variable). The regularized horseshoe prior shrinks coefficients to zero except where they are strongly related to the response variable, conditional on other predictors. To reduce overfitting, we defined a large amount of shrinkage, by assuming that `r unique(dd_model_info$par_ratio) * nrow(dd_model_info$x[[1]]$spectra[[1]] )` of the `r dd_model_info$x[[1]]$spectra[[1]] |> nrow()` predictor variables have non-zero coefficients [@Piironen.2017b]. Bayesian inference was done using Markov Chain Monte Carlo (MCMC) sampling with Stan [@StanDevelopmentTeam.2021a], using `r dd_stan_1_mcmc_settings$warmup` warmup iterations and `r dd_stan_1_mcmc_settings$iter - dd_stan_1_mcmc_settings$warmup` sampling iterations. Across all models, the maximum Monte Carlo standard error [@Vehtari.2021] for the degree of decomposition predicted for the training data and all analyzed peat samples was `r dd_stan_1_fit_mcse |> dplyr::filter(variable == "dd_mcse_mean") |> dplyr::pull(max) |> max() |> magrittr::multiply_by(100) |> round(1)`% for the mean, `r dd_stan_1_fit_mcse |> dplyr::filter(variable == "dd_mcse_sd") |> dplyr::pull(max) |> max() |> magrittr::multiply_by(100) |> round(1)`% (for standard deviations), and `r dd_stan_1_fit_mcse |> dplyr::filter(variable %in% c("dd_mcse_lower", "dd_mcse_upper")) |> dplyr::pull(max) |> max() |> magrittr::multiply_by(100) |> round(1)`% (for lower and upper 95% prediction interval boundaries). No model had divergent transitions and the largest rank-normalized $\hat{R}$ for model parameters was `r dd_stan_1_fit_rhat |> dplyr::pull(rhat) |> max() |> round(2)`, indicating convergence of the chains [@Vehtari.2021].
+
+## Model evaluation
+
+We estimated the predictive accuracy of the models with 10-fold cross-validation (CV). CV folds were defined in two ways to evaluate predictive performance for two scenarios. In the first scenario, we used stratified CV, where each observation is assigned to a categorical variable and observations are split into the 10 folds while approximately preserving relative category frequencies. Each observation was assigned to a category based on the study, species, and, for samples from @Reuter.2019, the site where the litter was grown (to balance occurrence of rhizome litter with different nutrient contents). This procedure approximates a test of the models with samples similar to the training data, as far as this is possible with our small and heterogeneous dataset. In the second scenario, we used grouped CV, where each observation is assigned to a categorical variable and observations for the same categorical variable all are assigned to the same fold. The categorical variable was the same as for the stratified CV. This estimates predictive performance for novel litter types that are not part of the training data, for example the only litterbag data with *Sphagnum* litter is from @Arsenault.2024a, and therefore in this scenario a model not trained on decomposed *Sphagnum* litter predicts the degree of decomposition for decomposed *Sphagnum* litter. The procedure also implies that some folds only contain undecomposed litter because there are fewer categories for litterbag data than CV-folds. The purpose of this second scenario is to test model robustness for novel litter types and therefore to identify limitations of application of a first version of the models trained on few distinct litter types.   
+To compare models, we used the expected log predictive density (ELPD) computed on observations held out during CV. Model evaluation was performed with the loo package [@Vehtari.2019]. Following rules of thumb [@Sivula.2022], we assumed models to have equivalent predictive performance (according to the capability of our evaluation) when the difference of their ELPD ($\Delta$ELPD) is smaller than 4, and otherwise when $\Delta$ELPD is larger than two times its standard error (using normal approximation for $\Delta$ELPD). To give an easier to interpret performance metric, we also computed the root mean square error (RMSE).  
+We analyzed what fraction of the analyzed peat samples is within the prediction domain of the models. The prediction domain of a model (based on @Wadoux.2021, defined in @Teickner.2023) is the range of the predictor variables covered by the training data. A sample is within the prediction domain if its preprocessed spectrum is within the range for each predictor variable, otherwise it is outside the prediction domain. If a sample is outside the prediction domain, it has spectral properties that cannot be interpolated from the training data and therefore the model extrapolates when making predictions for the spectra. In particular with models that overfit, this may lead to larger prediction errors than fitting errors for the training data.  
+We analyzed whether residuals are related to the nitrogen content as proxy for proteins because it is known that protein content differs between species and increases during decomposition [@Reuter.2020; @Scheffer.2001; @Limpens.2003; @Biester.2014], and that proteins, despite their comparatively small amount in peat, are a main control of the height and shape of peaks that are also caused by aromatics [@Stuart.2004]. Thus, if one considers that the training data contains decomposed litter only from three species, the fit of the models may be confounded by proteins and this may bias predictions, especially under extrapolation.  
+The impacts of minerals on the estimated degree of decomposition was evaluated by adding a scaled version of a spectrum of a peat sample from the pmird database [@Drollinger.2019; @Drollinger.2020] with large mineral content (`r dd_data_pmird_mineral |> dplyr::mutate(res = (1 - loss_on_ignition)) |> dplyr::pull(res) |> round(2)` g g$^{-1}$, computed from loss on ignition; based on the mid infrared spectrum (Fig. \@ref(si-fig:dd-plot-16)), many of them are silicates [@Stuart.2004; @Parikh.2014]) to selected spectra from the training data from different taxa and with different degree of decomposition. A range of scaling factors from absence of silicates to a clear dominance of silicates was chosen and we predicted the degree of decomposition for each spectrum created this way. For the same samples from the training data, we evaluated the impact of adding increasing amounts of a very decomposed sample (based on HI$_{1630/1090}$, peat structure, C content, and degree of decomposition predicted by all models).  
+Finally, we evaluated qualitative behavior of the models for two peat cores from the peatland Venner Moor [@Teickner.2025c] and three peat cores from Patagonian peatlands [@Broder.2012]. The Venner Moor is a former bog that was used for small-scale peat extraction, drained in 1895 for channel constructions and partly rewetted since the 1970's [@Wilkens.1955; @NaturschutzzentrumKreisCoesfeldeV.2017]. The first core was taken in the part of the peatland that was used for peat extraction and rewetted; here, predictions should indicate a small degree of decomposition for peat formed after rewetting and a sharp transition to the remaining peat that was decomposed during drainage. The second core was taken up to the mineral base in an area without peat extraction that was not rewetted and is overgrown by trees; here, predictions should indicate a small degree of decomposition for the top 5 cm where undecomposed leaves and *Sphagnum* grow, a large degree of decomposition for the part above the water table level, and a smaller degree of decomposition for the, based on C/N, HI$_{1630/1090}$, and photographs, undecomposed water saturated lower part (except for the bottom sections). The Patagonian cores feature ash layers and therefore allow to explore how the models extrapolate for peat samples with larger mineral contents. We emphasize that for peat samples, $\gamma_\text{MIRS}$ underestimates $\gamma$ and can be interpreted as the largest possible degree of decomposition of the least decomposed component and the smallest possible degree of decomposition of the most decomposed component. Therefore, qualitative evaluations of $\gamma_\text{MIRS}$ with the cores mentioned above is possible.
+
+<!--For the qualitative evaluation against the peat cores mentioned in the Introduction, we plot the suggested decomposition indicator as depth profiles. Macrofossil abundances and TA-WTD are plotted alongside depth profiles where they are available [---todo: consider doing cross-correlation analysis with the TA-WTD?].-->
+
+## Relation of other decomposition indicators to the degree of decomposition
+
+First, we analyzed the relation between other decomposition indicators (C/N, H/C, O/C, $\delta^{13}$C, $\delta^{15}$N, HI$_{1630/1090}$, $\Delta$G$_\text{f}^0$, and NOSC) and the degree of decomposition measured in the litterbag samples by computing Pearson correlations and creating scatterplots that differentiate between litter types (plant species and organ).  
+Second, we compared the variation of HI$_{1630/1090}$ for the undecomposed litter samples with the variation in the degree of decomposition predicted by the models for the same samples and with the variation of HI$_{1630/1090}$ for all analyzed peat samples with a C content larger than 0.3 g g$^{-1}$, in order to analyze in more detail whether HI$_{1630/1090}$ confounds differences in the chemistry of undecomposed litter with decomposition, compared to the suggested decomposition indicator.  
+<!--Third, we analyzed the relation between the other decomposition indicators (now also including bulk density) and the degree of decomposition predicted by the models for the peat samples by computing Pearson correlations and creating scatterplots that differentiate between peat cores.-->
+<!--To test hypotheses regarding EAC and EDC, we predict EAC and EDC from MIRS for two sets of peat samples: peat samples with *Sphagnum* abundance $>80%$, peat samples with sedge abundance $>60%$, and peat samples with shrub abundance $>60%$ from cores with macrofossil information; and for the litterbag samples, and plot the EAC and EDC versus the suggested degree of decomposition (or the measured degree of decomposition for litter samples).-->
+We used models from the irpeat package to predict O/C, H/C, $\Delta$G$_\text{f}^0$, and NOSC, missing values for bulk density, C and N contents, and C/N, and for all samples humification index HI$_{1630/1090}$ (the ratio of the intensity at 1630 cm$^{-1}$ to the intensity at $1090$ cm$^{-1}$) as defined in @Broder.2012. In many cases, the litter samples are outside the prediction domains of the corresponding models from the irpeatmodels package and therefore may be biased [@Teickner.2023]. For $\delta^{13}$C and $\delta^{15}$N values, the prediction models have large prediction errors and we therefore omitted missing values in our analyses. For these reasons, we consider our analysis of the relation of the degree of decomposition to O/C, H/C, $\Delta$G$_\text{f}^0$, and NOSC as exploratory analyses. To make clear whether values are measured or predicted from MIRS, we label all MIRS predicted variables with a subscript "MIRS", for example C$_\text{MIRS}$, or use graphical means to differentiate measurements from predictions.
+
+
+## Underestimation of the degree of decomposition by $\gamma_\text{MIRS}$ in two-component systems {#dd-methods-bias-simulations}
+
+As outlined in the Introduction, $\gamma_\text{MIRS}$ may underestimate $\gamma$ for multi-component systems because more decomposed components contribute less to the MIRS signal than less decomposed components. To our knowledge, this bias, which is also relevant for many other decomposition indicators (see the Discussion), has not been analyzed yet and it is also not mentioned in recent reviews of peat decomposition indicators [@Biester.2014; @Zaccone.2018]. We analyzed the bias with two simulations. The first simulation calculates the bias for a two-component system and analyzes how it depends on the relative mass fractions and the degree of decomposition of each component. The second simulation creates two-component systems by mixing the litter samples used for model development in different ratios and then using the models to predict $\gamma_\text{MIRS}$. Since we know the degree of decomposition for each litter type, we can compare $\gamma$ to $\gamma_\text{MIRS}$ predicted by our models.
+
+### Simulation 1 {#dd-methods-bias-simulation-1}
+
+Let $m_i(t)$ be the mass of component $i$ of a peat sample at time $t$, $t_0$ be the time at which a layer was initially formed, such that $m_i(t_0)$ is considered the initial mass. Then the degree of decomposition of component $i$ at time $t$ is $\gamma_i(t) = \frac{m_i(t_0) - m_i(t)}{m_i(t_0)}$. The degree of decomposition of a peat sample (multi-component system) is:
+
+\begin{equation}
+\begin{aligned}
+\gamma(t) &=& 1 - \frac{m(t)}{m(t_0)} &=& \frac{\sum_i^n m_i(t_0) \gamma_i(t)}{m(t_0)},
+(\#eq:eq-dd-gamma-bias-1)
+\end{aligned}
+\end{equation} 
+
+where $m(t)$ is the mass of the sample at time $t$, $m(t_0)$ the mass of the undecomposed sample. In contrast, $\gamma_\text{MIRS}(t)$ is:
+
+\begin{equation}
+\begin{aligned}
+\gamma_\text{MIRS}(t) &=& \frac{\sum_i^n m_i(t) \gamma_{\text{MIRS},i}(t)}{m(t)},
+(\#eq:eq-dd-gamma-bias-2)
+\end{aligned}
+\end{equation} 
+
+where $\gamma_{\text{MIRS},i}(t)$ is the degree of decomposition of component $i$. Thus, in a multi-component system, the signal of each component ($\gamma_{\text{MIRS},i}(t)$) is weighted by its mass fraction at the time of sampling and not by its mass fraction in the undecomposed sample; components with larger degree of decomposition will therefore contribute less to the signal of the sample than components with smaller degree of decomposition.  
+We analyzed the bias in $\gamma_\text{MIRS}(t)$ as the difference $\gamma_\text{MIRS}(t) - \gamma(t)$, assuming that for the individual components, $\gamma_{\text{MIRS},i}(t) = \gamma_i(t)$, i.e. the MIRS model perfectly predicts $\gamma_i(t)$ for each component:
+
+\begin{equation}
+\begin{aligned}
+\gamma_\text{MIRS}(t) - \gamma(t) &=& \frac{\sum_i^n m_i(t) \gamma_{\text{MIRS},i}(t)}{m(t)} - \frac{\sum_i^n m_i(t_0) \gamma_i(t)}{m(t_0)}\\ 
+&=& \frac{\sum_i^n m_i(t) \gamma_{i}(t)m(t_0) - m(t)m(t_0) + m^2(t)}{m(t) m(t_0)}
+\end{aligned}
+(\#eq:eq-dd-gamma-bias-3)
+\end{equation}
+
+In our simulation, we use two components with mass fractions of component 1 ranging from `r range(dd_simulation_2$mf_1_1) |> knitr::combine_words(and = " to ")` g g$^{-1}$ and degree of decomposition of both components ranging from `r range(dd_simulation_2$gamma_1) |> knitr::combine_words(and = " to ")` g g$^{-1}$.
+
+### Simulation 2
+
+We preprocessed all litter spectra (interpolation, clipping, baseline correction, area normalization). For `r paste0("*", dd_simulation_3_species |> stringr::str_replace("[A-Z]{1}.+ ", paste0(stringr::str_sub(dd_simulation_3_species, 1, 1), ". ")), "*") |> knitr::combine_words()`, we selected one undecomposed litter sample and in addition three of the litterbag samples with intermediate degree of decomposition. The spectra of these samples were scaled in the same range as component 1 in simulation 1. We then selected a second set of spectra consisting of the 5 most decomposed litter samples and added these to each of the spectra from the first set, resulting in a total of `r dd_simulation_3 |> dplyr::filter(taxon_rank_value %in% dd_simulation_3_species) |> nrow()` spectra. We predicted $\gamma_\text{MIRS}(t)$ with all three models for these mixtures, calculated $\gamma(t)$ and the bias ($\gamma_\text{MIRS}(t) - \gamma(t)$), which we compared to the theoretically expected bias, calculated as in simulation 1.  
+
+
+<!--
+
+
+
+Here, we formalize this idea, estimate the maximum possible bias with simulations of two-component systems, and then explain how we analyzed the bias with litterbag data for the prediction models we computed.
+
+A general formula for the value of a decomposition indicator $r$ for component $i$ at time $t$ is:
+
+\begin{equation}
+r_i(t) = (r_i(t_0) + f_i(\gamma_i(t))) \beta_{i,1} \frac{m_i(t)}{m_i(t_0)} = (r_i(t_0) + f_i(\gamma_i(t))) \beta_{i,1} (1 - \gamma_i(t)),
+(\#eq:eq-dd-gamma-bias-1)
+\end{equation}
+
+where $r_i(t_0)$ is the value of the decomposition indicator for the undecomposed component, $\gamma_i(t)$ is the degree of decomposition of the component at time $t$, $m_i(t)$ is the mass of the component at time $t$, $m_i(t_0)$ is the mass of the undecomposed component, $\frac{m_i(t)}{m_i(t_0)}$ is the remaining fraction of the initial mass of the component, $\beta_{i,1}$ defines how $r_i$ depends on the fraction of initial mass remaining, and $f_i(\gamma_i(t))$ is a function that describes how $r_i$ depends on the degree of decomposition.    
+
+For the ash residue method and an ideal decomposition indicator, $f(\gamma_i(t)) = \beta_2 \gamma_i(t)$, where $\beta_2$ is some constant. For the ash residue method, $r_i(t)$ is the mass of ash of component $i$, $\beta_2 = 0$, $\beta_1 = \frac{1}{(1 - \gamma_i(t))}$, and $r_i(t) = r_i(t_0)$ for all $t \ge t_0$: 
+
+\begin{equation}
+\begin{aligned}
+r_{\text{ash},i}(t) &=& r_{\text{ash},i}(t_0)\\
+\iff m_i(t) c_{\text{ash},i}(t) &=& m_i(t_0) c_{\text{ash},i}(t_0)\\
+\iff \gamma(t) &=& 1 - \frac{m_i(t)}{m_i(t_0)} = 1 - \frac{c_{\text{ash},i}(t_0)}{c_{\text{ash},i}(t)},
+\end{aligned}
+(\#eq:eq-dd-gamma-bias-2)
+\end{equation}
+
+which shows the dependence on the initial ash concentration, $c_{\text{ash},i}(t_0)$. For an ideal decomposition indicator, $r_i(t) = \gamma_i(t)$, $r_i(t_0) = \gamma_i(t_0) = 0$, $\beta_2 = 1$, and $\beta_1 = \frac{1}{(1 - \gamma_i(t))}$ for all $t \ge t_0$:
+
+\begin{equation}
+r_{\text{ideal},i}(t) = \gamma_i(t)
+(\#eq:eq-dd-gamma-bias-3)
+\end{equation}
+
+When we predict $r_i(t) = \gamma_i(t)$ with a spectral model from MIRS ($r_{\text{MIRS},i}(t)$), then $\beta_1 = \frac{1}{(1 - \gamma_i(t))}$ because MIRS are measured with a defined mass of the sample and are normalized in a standardized way during spectral preprocessing and therefore $r_{\text{MIRS},i}(t)$ is independent of how much of the initial mass is left. Therefore:
+
+\begin{equation}
+r_{\text{MIRS},i}(t) = (r_{\text{MIRS},i}(t_0) + f_{\text{MIRS},i}(\gamma_i(t)))
+(\#eq:eq-dd-gamma-bias-4)
+\end{equation}
+
+When we fit a spectral prediction model to litterbag data for component $i$ and this model is a good approximation for the measured degree of decomposition, then $f_{\text{MIRS},i}(\gamma_i(t))$ has the same form as for the ideal decomposition indicator and therefore $r_{\text{MIRS},i}(t) = \gamma_i(t)$.
+
+The degree of decomposition of a peat sample consisting of $n$ components is the initial mass-weighted average of the degree of decomposition of each component:
+
+\begin{equation}
+\gamma(t) = \frac{\sum_i^n m_i(t_0) \gamma_i(t_0)}{\sum_i^n m_i(t_0)}
+(\#eq:eq-dd-gamma-bias-5)
+\end{equation}
+
+For the ash residue method, this is:
+
+\begin{equation}
+\begin{aligned}
+\gamma(t) &=& \frac{\sum_i^n m_i(t_0) \left(1 - \frac{c_{\text{ash},i}(t_0)}{c_{\text{ash},i}(t)} \right)}{\sum_i^n m_i(t_0)}\\
+&=& \frac{\sum_i^n \left(m_i(t_0) - \frac{r_{\text{ash},i}(t_0)}{c_{\text{ash},i}(t)} \right)}{\sum_i^n m_i(t_0)}\\
+&=& 1 - \frac{\sum_i^n \frac{r_{\text{ash},i}(t_0)}{c_{\text{ash},i}(t)}}{m(t_0)}\\
+&=& 1 - \frac{c_\text{ash}(t_0)}{c_\text{ash}(t)},\\
+(\#eq:eq-dd-gamma-bias-6)
+\end{aligned}
+\end{equation}
+
+and therefore the method is unbiased for multi-component systems. For MIRS predicted degree of decomposition, the formula is:
+
+\begin{equation}
+\gamma(t) = \frac{\sum_i^n m_i(t_0) \gamma_{\text{MIRS},i}(t)}{\sum_i^n m_i(t_0)},
+(\#eq:eq-dd-gamma-bias-7)
+\end{equation}
+
+and it is impossible to compute $\gamma(t)$ without $m_i(t_0)$ (or $m_i(t)$ or $\gamma_{\text{MIRS},i}(t)$, from which $m_i(t_0)$ can be computed). The degree of decomposition of the system estimated from MIRS ($\gamma_\text{MIRS}(t)$) is the mass-weighted average of $\gamma_\text{MIRS}(t)$ of the individual components:
+
+\begin{equation}
+\gamma_\text{MIRS}(t) = \frac{\sum_i^n m_i(t) \gamma_{\text{MIRS},i}(t)}{\sum_i^n m_i(t)} = \frac{\sum_i^n m_i(t) \gamma_{\text{MIRS},i}(t)}{m(t_0) (1 - \gamma(t))} 
+(\#eq:eq-dd-gamma-bias-8)
+\end{equation}
+-->
+
+
+
+<!--
+\begin{equation}
+\gamma(t) = \frac{1}{\sum_j^n m_j(t_0)} \sum_j^n \left(m_j(t_0) \frac{m_j(t_0) - m_j(t)}{m_j(t_0)} \right) = \frac{1}{\sum_j^n m_j(t_0)} \sum_j^n \left(m_j(t_0) - m_j(t) \right)
+(\#eq:eq-dd-gamma-bias-1)
+\end{equation}
+
+
+In the ash residue method, the mass of ash is constant over time ($m_\text{ash}(t) = c_\text{ash}(t) m(t) = c_\text{ash}(t_0) m(t_0)$, where $c_\text{ash}(t)$ is the concentration of ash in the system at time $t$; thus: $m(t_0) = \frac{c_\text{ash}(t) m(t)}{c_\text{ash}(t_0)}$) and therefore, we can compute the degree of decomposition as:
+
+$$
+\gamma(t) = \frac{m(t_0) - m(t)}{m(t_0)} = \frac{\frac{c_\text{ash}(t) m(t)}{c_\text{ash}(t_0)} - m(t)}{\frac{c_\text{ash}(t) m(t)}{c_\text{ash}(t_0)}} = 1 - \frac{c_\text{ash}(t_0)}{c_\text{ash}(t)}
+$$
+
+In general, the magnitude of a signal (mass of ash, intensity of a MIRS at a specific wavenumber) is a function of $t$ and the initial mass and may not be constant over time. Let $r(t)$ be the signal and $f(t)$ a function 
+
+$$
+r(t) = f(c(t_0) m(t_0), t) = f(r(t_0), t)
+$$
+
+For example, assume that $c(t)$ is some linear function of the degree of decomposition and the signal is proportional to the fraction of initial mass left. This would be the same as the ash residue method, but with the ash decomposing at some rate. Then:
+
+$$
+r(t) = f(r(t_0), t) = \beta_1 (r(t_0) + \beta_2\gamma(t)) \frac{m(t)}{m(t_0)}\\ 
+\implies m(t_0) = \beta_1 (r(t_0) + \beta_2 \gamma(t)) \frac{m(t)}{r(t)} = \gamma(t) \frac{\beta_1 \beta_2 m(t)}{r(t)} + \frac{\beta_1 r(t_0) m(t)}{r(t)}
+$$
+
+For the ash residue method, $\beta_1 = m(t_0)/m(t)$, $\beta_2 = 0$, and $r(t_0) = r(t)$. 
+
+And therefore:
+
+$$
+\gamma(t) = \frac{m(t_0) - m(t)}{m(t_0)} = \frac{\gamma(t) \frac{\beta_1 \beta_2 m(t)}{r(t)} + \frac{\beta_1 r(t_0) m(t)}{r(t)} - m(t)}{\gamma(t) \frac{\beta_1 \beta_2 m(t)}{r(t)} + \frac{\beta_1 r(t_0) m(t)}{r(t)}}\\
+\iff \gamma^2(t)\frac{\beta_1 \beta_2 m(t)}{r(t)} + \gamma(t) \frac{\beta_1 r(t_0) m(t)}{r(t)} - \gamma(t) \frac{\beta_1 \beta_2 m(t)}{r(t)} - \frac{\beta_1 r(t_0) m(t)}{r(t)} + m(t) = 0\\
+\iff \gamma^2(t) + \gamma(t) \frac{r(t_0) - \beta_2}{\beta_2} + \frac{r(t) - \beta_1 r(t_0)}{\beta_1 \beta_2} = 0\\
+\gamma(t) = \frac{ - \frac{r(t_0) - \beta_2}{\beta_2} \pm \sqrt{\left(\frac{r(t_0) - \beta_2}{\beta_2} \right)^2 - 4 \frac{r(t) - \beta_1 r(t_0)}{\beta_1 \beta_2} }}{2}
+$$
+
+```{r}
+f <- function(rt, rt0, beta1, beta2, sign = 1) {
+  
+  a1 <- 1
+  a2 <- (rt0 - beta2)/beta2 
+  a3 <- (rt - beta1 * rt0)/(beta1*beta2)
+  
+  (-a2 + sign * sqrt(a2^2 - 4 * a3)) / (2*a1)
+  
+}
+```
+
+
+$$
+0 = \gamma^2(t) - \frac{\beta_1 \beta_2 - \beta_1 r(t)}{\beta_2} \gamma(t) - \frac{\beta_1 r(0) - \beta_2 r(t)}{\beta_2}\\
+\implies \gamma(t) = \frac{\frac{\beta_1 \beta_2 - \beta_1 r(t)}{\beta_2} \pm \sqrt{\left( \frac{\beta_1 \beta_2 - \beta_1 r(t)}{\beta_2} \right)^2 + 4 \frac{\beta_1 r(0) - \beta_2 r(t)}{\beta_2}}}{2}
+$$
+
+```{r}
+f <- function(rt, rt0, beta1, beta2) {
+  
+  a1 <- 1
+  a2 <- -(beta1 * beta2 - beta1 * rt) / beta2 
+  a3 <- -(beta1 * rt0 - beta2 * rt) / beta2
+  
+  (-a2 - sqrt(a2^2 - 4 * a3)) / (2*a1)
+  
+}
+
+g <- function(gamma, rt0, beta1, beta2) {
+  
+  beta1 * (rt0 + beta2 * gamma) * (1 - gamma)
+  
+}
+```
+
+-->
+
+
+## Reconstruction of past *Sphagnum* NPP {#dd-methods-reonstruction-npp}
+
+Besides testing peatland models, a potential application of a decomposition indicator that directly estimates the degree of decomposition is to reconstruct initial layer masses by dividing the mass of a peat sample by the fraction of initial mass remaining ($1 - \gamma(t)$). Since $\gamma_\text{MIRS}(t)$ underestimates $\gamma(t)$, this approach also underestimates the initial mass or NPP and we therefore call an approach that reconstructs initial layer masses with an uncorrected $\gamma_\text{MIRS}(t)$ a naive reconstruction of initial masses (or NPP in the absence of roots). Based on the results of our simulations described in the previous subsection, we suggest that under some conditions the naive approach can be used to approximately reconstruct past aboveground NPP of individual litter types (see the Discussion, subsection \@ref(dd-discussion-gamma-mirs-bias), and supporting section \@ref(si-dd-naive-reconstruction-applied)). For the dated peat cores (MH1, MK1, OD2), we used this approach to estimate the average NPP for some *Sphagnum* species and compare these estimates to measured *Sphagnum* NPP from previous studies. The details of this analysis are described in supporting section \@ref(si-dd-naive-reconstruction-applied).
+
+<!--NPP was reconstructed for layers that met the following conditions: the entire layer had a macrofossil volume fraction of *Sphagnum* $\ge `r dd_reconstruction_initial_mass_rate_1 |> dplyr::pull(macrofossil_volume_fraction_threshold) |> unique()`$%, model `r dd_model_names(2, dd_model_info)` predicts a median degree of decomposition less than -->
+
+# Results
+
+## Predictive performance
+
+```{r}
+dd_stan_1_kfold_2_comparison_df <- 
+  dd_make_kfold_comparison_dataframe(
+    kfold_comparison = dd_stan_1_kfold_2_comparison, 
+    kfold_target_name = "dd_stan_1_kfold_2", 
+    dd_model_info = dd_model_info
+  ) |>
+  dplyr::mutate(
+    elpd_diff_is_significant = elpd_diff != max(elpd_diff) & elpd_diff + 2 * se_diff <= 0.0
+  )
+dd_stan_1_kfold_comparison_df <- 
+  dd_make_kfold_comparison_dataframe(
+    kfold_comparison = dd_stan_1_kfold_comparison, 
+    kfold_target_name = "dd_stan_1_kfold", 
+    dd_model_info = dd_model_info
+  ) |>
+  dplyr::mutate(
+    elpd_diff_is_significant = elpd_diff != max(elpd_diff) & elpd_diff + 2 * se_diff <= 0.0
+  )
+```
+
+
+All models have a similar fit to the training data (Fig. \@ref(fig:dd-plot-15)) and similar predictive performance as measured by their ELPD durig CV (Tab. \@ref(tab:dd-tab-loo-comparison-1)). Model `r dd_stan_1_kfold_2_comparison_df |> dplyr::arrange(elpd_diff) |> dplyr::slice(length(elpd_diff)) |> dplyr::pull(model_name)` had the best average predictive accuracy (= maximum average ELPD) for the stratified CV and model `r dd_stan_1_kfold_comparison_df |> dplyr::arrange(elpd_diff) |> dplyr::slice(length(elpd_diff)) |> dplyr::pull(model_name)` for the grouped CV. Using a normal approximation for $\Delta$ELPD and a two-sided significance level of 5%, only model `r dd_stan_1_kfold_2_comparison_df |> dplyr::filter(elpd_diff_is_significant) |> dplyr::pull(model_name)` in the stratified CV `r if(any(dd_stan_1_kfold_comparison_df$elpd_diff_is_significant) || ! all(dd_stan_1_kfold_2_comparison_df$model_name[dd_stan_1_kfold_2_comparison_df$elpd_diff_is_significant] == dd_model_names(3, dd_model_info))) {stop("[---todo: check if(any(dd_stan_1_kfold_comparison_df$elpd_diff_is_significant ||...]")}` has a detectably worse predictive accuracy than the model with best average ELPD (Tab. \@ref(tab:dd-tab-loo-comparison-1)). Large errors of $\Delta$ELPD in the grouped CV indicate a large variability in predictive performance of the model for the different folds, as expected when testing the model with litter samples from species not included in the training data.  
+For all models, the fit to the training data is better on average (smaller average RMSE) than for predictions in the two CV scenarios (Fig. \@ref(fig:dd-plot-15)), indicating that all models overfit. The two models using derivative spectra had the, on average, best fit to the training data, but worse or not much better predictive accuracy in the CV scenarios, indicating an, on average, larger overfitting risk than for model `r dd_model_names(1, dd_model_info)`, which does not use derivative spectra.  
+Predictive accuracy of all models was worse for the grouped CV than for the stratified CV (Fig. \@ref(fig:dd-plot-15)), as expected, because in the stratified CV models were tested with samples from similar studies and species as the data they were trained with, whereas in the grouped CV some folds contained samples from species the model was not trained with. In the grouped CV, $\gamma$ is underestimated by all models for decomposed *T. latifolia* and *S. capillifolium* samples from @Arsenault.2024a. Conversely, $\gamma$ is overestimated for undecomposed litter samples, with prediction errors larger than 10% for model `r dd_model_names(1, dd_model_info)` for `r dd_data_model_evaluation_1 |> dplyr::filter(id_model == 1 & cv_type == "Grouped CV" & abs(y - yhat_mean) > 0.1 & y <= 0.01) |> dplyr::mutate(taxon_rank_value = paste0("*", taxon_rank_value, "*")) |> dplyr::pull(taxon_rank_value) |> unique() |> knitr::combine_words()`, and for the other two models for `r dd_data_model_evaluation_1 |> dplyr::filter(id_model != 1 & cv_type == "Grouped CV" & abs(y - yhat_mean) > 0.1 & y <= 0.01) |> dplyr::mutate(taxon_rank_value = paste0("*", taxon_rank_value, "*")) |> dplyr::pull(taxon_rank_value) |> unique() |> knitr::combine_words()`. Model `r dd_model_names(3, dd_model_info)` has, both in the grouped and stratified CV, the largest average prediction errors for undecomposed litter (Fig. \@ref(fig:dd-plot-15)).
+
+(ref:dd-plot-15-caption) Fitted values (first column) or predictions for folds held out during CV for the two CV scenarios (second and third columns) versus the measured degree of decomposition for the training data, for each model (rows). For litterbag data, different colors rerpesent different taxa, for undecomposed litter all samples are labelled as "Other" and have the same color. For *P. australis* rhizomes from @Reuter.2020, we additional differentiate between initial N contents (low, medium, and high N content) because of the contrasting response of high-N rhizomes to other decomposition indicators (see Fig. \@ref(fig:dd-plot-12)). Error bars are 95% prediction intervals. For each case, we give the average RMSE and lower and upper 95% confidence intervals computed from MCMC draws.
+
+```{r dd-plot-15, fig.cap='(ref:dd-plot-15-caption)', out.width='100%'}
+knitr::include_graphics(tar_read(dd_plot_15))
+```
+
+(ref:tab-dd-tab-loo-comparison-1-caption) Difference of expected log predictive density of all models to the best model ($\Delta$ELPD) and corresponding standard error (SE($\Delta$ELPD)) for stratified or grouped cross-validation. In each case, the best model is at the top.
+
+```{r dd-tab-loo-comparison-1, tab.cap='(ref:tab-dd-tab-loo-comparison-1-caption)', message=FALSE, warning=FALSE}
+dplyr::bind_cols(
+  dd_stan_1_kfold_2_comparison_df |>
+    dplyr::select(-elpd_diff_is_significant),
+  dd_stan_1_kfold_comparison_df |>
+    dplyr::select(-elpd_diff_is_significant)
+) |>
+  dplyr::mutate(
+    dplyr::across(
+      dplyr::where(is.numeric),
+      function(.x) round(.x, digits = 2L)
+      )
+  ) |>
+  kableExtra::kable(
+    format = "latex",
+    booktabs = TRUE, 
+    longtable = FALSE,
+    escape = FALSE, 
+    row.names = FALSE,
+    col.names = rep(c("Model", "$\\Delta$ELPD", "SE($\\Delta$ELPD)"), 2L)
+  ) |>
+  kableExtra::add_header_above(c("Stratified CV" = 3, "Grouped CV" = 3))
+```
+
+
+## Model predictions under extrapolation
+
+A comparison of the prediction domains of the models to the spectral range covered by the analyzed peat samples indicates that many of the peat samples have MIRS different to the training data. HI$_{1630/1090}$ as alternative decomposition indicator, C or C$_\text{MIRS}$, and photographs of the peat samples, suggest that samples outside prediction domains are either more decomposed or have large mineral contents (Fig. \@ref(si-fig:dd-plot-17) and \@ref(si-fig:dd-plot-18)), which is not surprising since there are comparatively few decomposed samples and no mineral-rich samples in the training data. Data coverage by prediction domains differs between the models: `r round(sum(dd_data_pmird_peat_cores_yhat[[1]]$degree_of_decomposition_in_pd) / nrow(dd_data_pmird_peat_cores_yhat[[1]]) * 100, digits = 1)`% of the peat samples are within the prediction domain for model `r dd_model_names(1, dd_model_info)` and `r round(sum(dd_data_pmird_peat_cores_yhat[[2]]$degree_of_decomposition_in_pd) / nrow(dd_data_pmird_peat_cores_yhat[[2]]) * 100, digits = 1)`% and `r round(sum(dd_data_pmird_peat_cores_yhat[[3]]$degree_of_decomposition_in_pd) / nrow(dd_data_pmird_peat_cores_yhat[[3]]) * 100, digits = 1)`% for the other two models, which indicates that derivative spectra differ more between the peat and the training data data than underived spectra. Thus, the models extrapolate for more decomposed and mineral-rich peat and the prediction domain of model `r dd_model_names(1, dd_model_info)` covers most of the peat samples.   
+<!--We analyzed whether residuals are related to N$_\text{MIRS}$ as proxy for proteins because it is known that protein content differs between species and increases during decomposition, and that proteins, despite their comparatively small amount in peat, are a main control of the height and shape of peaks that are also caused by aromatics. Thus, if one considers that the training data contains decomposed litter only from three species, the fit of the models may be confounded by proteins and this may bias predictions, especially under extrapolation.--> A plot of residuals versus N$_\text{MIRS}$ for different levels of the degree of decomposition suggests that model `r dd_model_names(1, dd_model_info)` underestimates the degree of decomposition for samples in the training data with a degree of decomposition between ca. 20 and 40% and N$_\text{MIRS}$ content smaller than ca. 0.02 g g$^{-1}$ (Fig. \@ref(fig:dd-plot-8)). For the models computed with derivative spectra, this bias is smaller (Fig. \@ref(fig:dd-plot-8)). This may indicate that model `r dd_model_names(1, dd_model_info)` makes less accurate predictions for the peat samples analyzed here (`r dd_data_pmird_peat_cores_irpeat |> dplyr::mutate(nitrogen_content_1 = sum(as.numeric(nitrogen_content_1) < 0.02) / length(nitrogen_content_1)) |> dplyr::slice(1) |> dplyr::pull(nitrogen_content_1) |> magrittr::multiply_by(100) |> round(0)`% have a N$_\text{MIRS}$ content smaller than 0.02 g g$^{-1}$) and in general [@Loisel.2014].<!--, which could explain why model ... predicts a smaller average degree of decomposition for many peat samples from the Venner Moor and the Patagonian peatlands (Fig. \@ref(fig:dd-plot-10-2)). -->
+
+(ref:dd-plot-8-caption) Model residuals of degree of decomposition versus nitrogen content for different levels of the degree of decomposition (columns) and the three models (rows). Points are averages and lines and shaded areas averages and 95% confidence intervals of regression models fitted to the average residuals. "Reliability" refers to how reliable the N or N$_\text{MIRS}$ values are. MIRS predicted variables are less reliable when they are not in the prediction domain, which is the case only for undecomposed litter samples.
+
+```{r dd-plot-8, fig.cap='(ref:dd-plot-8-caption)', out.width='100%'}
+knitr::include_graphics(tar_read(dd_plot_8))
+```
+
+
+
+We analyzed the robustness of the models under extrapolation for decomposed and mineral-rich samples. As we did not have access to independent validation data, we conducted qualitative sensitivity analyses by selecting some litter samples from the training data, adding multiples of spectra of a silicate-dominated or a very decomposed (based on HI$_{1630/1090}$, peat structure, C content, and degree of decomposition predicted by all models), and then predicting the degree of decomposition for these modified spectra.   
+For silicates, prediction errors of all models increase the more silicates are mixed into the samples such that 95% prediction intervals cover nearly the whole range of possible degrees of decomposition (Fig. \@ref(si-fig:dd-plot-1-1) to \@ref(si-fig:dd-plot-1-3)). The behavior of predicted medians differs between the models. For model `r dd_model_names(1, dd_model_info)`, predictions overall increase for undecomposed samples and decrease for more decomposed samples, but the differences are never larger than ca. 30%. Model `r dd_model_names(3, dd_model_info)` behaves similar, but predictions always increase with more silicate influence and differences to the true value may exceed 50%. For model `r dd_model_names(2, dd_model_info)` predictions decrease with more silicate influence for all but the undecomposed samples and compared to the other models more posterior probability is placed on smaller degrees of decomposition.  
+For decomposed peat, the median predicted degree of decomposition increases for all samples and models, as expected when adding a highly decomposed peat sample to less decomposed litter samples (Fig. \@ref(si-fig:dd-plot-5-1) to \@ref(si-fig:dd-plot-5-3)). Median predictions for the maximum addition of the decomposed peat are smallest for model `r dd_model_names(1, dd_model_info)` and largest for model `r dd_model_names(3, dd_model_info)`. As for the silicate experiment, also prediction errors of all models increase the more of the decomposed sample is mixed into the samples, but prediction intervals are narrower than for the silicate experiment and, especially for already decomposed litters, their width also differs between models: Model `r dd_model_names(1, dd_model_info)` estimates the largest prediction errors and prediction errors increase the more of the decomposed peat is added to a sample, even for decomposed litter. Model `r dd_model_names(2, dd_model_info)` and in particular model `r dd_model_names(3, dd_model_info)` have narrower prediction intervals for already decomposed litter, but in most of the cases predictions do not differ significantly from those of model `r dd_model_names(1, dd_model_info)`. Thus, model `r dd_model_names(1, dd_model_info)` estimates a smaller median degree of decomposition with larger prediction errors than the models using derivative spectra.   
+
+## Application to peat cores
+
+Application of the models to peat cores from the drained and partly rewetted Venner Moor supports the sensitivity analysis results (Fig. \@ref(fig:dd-plot-10-2) (a)): Models `r dd_model_names(1, dd_model_info)` and `r dd_model_names(3, dd_model_info)` predict a large degree of decomposition for the decomposed (based on C/N, HI$_{1630/1090}$, peat structure) pre-drainage peat, and a small degree of decomposition for the peat formed since rewetting. Similarly, for the drained and forested core, both models correctly predict a small degree of decomposition for the top 5 cm, followed by more decomposed peat from the drainage acrotelm. Also, a smaller degree of decomposition in the mid part of the profile, which is still water saturated, and an increase in the degree of decomposition in the bottom part agree with C/N, HI$_{1630/1090}$, and peat structure. This analysis suggests that, even though many of the peat samples are not within the prediction domain of the models and we did not correct $\gamma_\text{MIRS}$ for multi-component systems, the suggested decomposition indicator currently can at least identify qualitative differences in the degree of decomposition.  
+Application of the models to peat cores with volcanic ash layers from Patagonia also supports results from the sensitivity analysis (Fig. \@ref(fig:dd-plot-10-2) (b)): Whenever mineral contents are large (as indicated by smaller C$_\text{MIRS}$ compared to adjacent layers), prediction errors are large. In addition, for the ash layer at 170 cm depth in core PBR 2, model `r dd_model_names(1, dd_model_info)` and `r dd_model_names(3, dd_model_info)` predict a larger median degree of decomposition than model `r dd_model_names(2, dd_model_info)` which is consistent with results from the sensitivity analysis and indicates that model `r dd_model_names(2, dd_model_info)` may less reliably extrapolate for samples with large mineral contents. An interesting observation is that each model can predict different degree of decomposition values for samples with similar mineral content in core PBR 2 (Fig. \@ref(fig:dd-plot-10-2) (b)): For the ash layer at 170 cm depth, all models predict a larger median degree of decomposition whereas they predict a smaller median degree of decomposition for the bottom mineral layer. This may indicate that the suggested decomposition indicator or an improved version of it can predict the degree of decomposition for samples with moderate mineral contents, unlike humification indices (HI$_{1630/1090}$ also shown in the plots) that are also computed from MIRS, but suggest a smaller degree of decomposition in both cases.  
+Since model `r dd_model_names(1, dd_model_info)` underestimates the degree of decomposition for training samples with intermediate degree of decomposition and N content smaller than 0.02 g g$^{-1}$, smaller estimates for $\gamma_\text{MIRS}$ by model `r dd_model_names(1, dd_model_info)` for cores from the Venner Moor and Patagonian cores are probably underestimates.
+
+
+
+(ref:dd-plot-10-2-caption) Degree of decomposition ($\gamma_\text{MIRS}$) predicted by all three models, C content (measured or predicted from MIRS), HI$_{1630/1090}$ for two cores from the drained peatland Venner Moor (a) and cores from three Patagonian peatlands with volcanic ash layers (b). In (b), approximate position of ash layers from @Broder.2012 are shown as grey bands.
+
+```{r dd-plot-10-2, fig.cap='(ref:dd-plot-10-2-caption)', out.width='100%'}
+knitr::include_graphics(tar_read(dd_plot_10_2))
+```
+
+
+## Underestimation of the degree of decomposition in multi-component systems {#dd-methods-bias-simulations-results}
+
+```{r}
+dd_simulation_2_threshold_m_1_1_f_1 <- 
+  dd_simulation_2 |>
+  dplyr::filter(! is.na(bias)) |>
+  dplyr::mutate(
+        m_1_1_f = m_1_1 / m_1
+  ) |>
+  dplyr::group_split(gamma_1) |>
+  purrr::map(function(.x) {
+    .x |>
+      dplyr::filter(abs(gamma_1 - gamma_2) == max(abs(gamma_1 - gamma_2)) & bias > -0.1) |>
+      dplyr::filter(m_1_1_f > 0.05 & m_1_1_f < 0.95)
+  }) |>
+  dplyr::bind_rows() |>
+  dplyr::pull(m_1_1_f) |> 
+  min() |> 
+  magrittr::multiply_by(100) |>
+  round(0)
+
+dd_simulation_2_threshold_bias_gamma_1 <- 
+  dd_simulation_2 |>
+    dplyr::filter(! is.na(bias) & abs(gamma_1 - gamma_2) == max(abs(gamma_1 - gamma_2))) |>
+    dplyr::mutate(
+        bias = abs(gamma_1 - gamma_mirs)
+    ) |>
+    dplyr::filter(bias <= 0.1) |>
+    dplyr::pull(mf_1_1) |> 
+  min() |>
+  round(2)
+```
+
+
+$\gamma_\text{MIRS}(t)$ will underestimate $\gamma(t)$ of a peat sample with two components, except when the two components have the same degree of decomposition. Generally, this bias is worse the more the degree of decomposition differs between the components and the smaller the fraction of the more decomposed component in the sample is (Fig. \@ref(fig:dd-plot-22)). Thus, the maximum possible bias depends in a complex way on the degree of decomposition of the components and their mass fractions (Fig. \@ref(fig:dd-plot-22)).
+
+
+
+
+(ref:dd-plot-22-caption) Bias when estimating $\gamma(t)$ with $\gamma_\text{MIRS}(t)$ for bulk peat consisting of two components, assuming that for each component the MIRS-predicted degree of decomposition ($\gamma_{\text{MIRS},i}(t)$) equals the degree of decomposition ($\gamma_i(t)$), versus the mass fraction of component 1 ($m_1(t)$) in the sample. In the simulation, the components have different degrees of decomposition, where each panel shows results where component 1 has the degree of decomposition given in the title ($\gamma_1(t)$) and each line is a distinct degree of decomposition for component 2 ($\gamma_2(t)$).
+
+```{r dd-plot-22, fig.cap='(ref:dd-plot-22-caption)', out.width='100%'}
+knitr::include_graphics(tar_read(dd_plot_22))
+```
+
+The bias when $\gamma_{\text{MIRS},i}(t)$ is predicted for the two-component systems mixed from the litter data is correlated with the theoretically expected bias for the same samples, but under conditions where the theoretical bias is worst, the bias of the models is even worse (more negative) (Fig. \@ref(fig:dd-plot-23-2)). For some litter types and when one of the two components dominates, the bias sometimes vanishes or shifts to positive values (overestimation), depending on how well the models fit the degree of decomposition of the respective component. 
+
+<!--Thus, both simulations show that how much $\gamma_\text{MIRS}(t)$ will underestimate $\gamma(t)$ depends on how much the degree of decomposition differs between the components of a peat sample and whether the more decomposed component has a small mass fraction in the sample.--> 
+
+
+
+<!--When this is not the case, the possible difference in the degree of decomposition between two components formed under the same environmental conditions may be smaller (and thus the bias less worse) because 
+
+
+Our simulations may exaggerate biases possible under field conditions because components in one peat sample that was formed under the same environmental conditions-->  
+
+(ref:dd-plot-23-2-caption) Results for the analysis of the bias ($\gamma_\text{MIRS} - \gamma$) in two-component systems created by combining the spectra of litter samples with different degree of decomposition. The plot shows the theoretically expected bias, where the degree of decomposition of the individual components ($\gamma_1$, $\gamma_2$) is perfectly predicted by the MIRS prediction models, versus the bias calculated with $\gamma_\text{MIRS}$ predicted by model `r dd_model_names(2, dd_model_info)` for the mixed spectra. Columns identify the species for component 1 and rows the species for component 2 in the mixture. Points are colored according to the difference of the degree of decomposition of the two components and triangles represent the mixtures where both components are decomposed (i.e., also $\gamma_1 > 0$ g g$^{-1}$). 
+
+```{r dd-plot-23-2, fig.cap='(ref:dd-plot-23-2-caption)', out.width='70%'}
+knitr::include_graphics(tar_read(dd_plot_23_2))
+```
+
+
+
+## Relation of other decomposition indicators to the degree of decomposition
+
+For the litter samples used in litterbag experiments (*Sphagnum capillifolium*, *Typha latifolia*, and *Phragmites australis*), Pearson correlations between other decomposition indicators and the measured degree of decomposition have the expected sign (positive for  HI$_{1630/1090}$, $\delta^{15}$N, $\Delta$G$_\text{f}^0$; negative for C/N, H/C, O/C, and NOSC; mixed for $\delta^{13}$C depending on the relative importance of isotope fractionation versus enrichment of $^{13}$C-depleted compounds), but they confound differences in litter chemistry between species and plant organs with decomposition (Fig. \@ref(fig:dd-plot-12)). For undecomposed litter from all species, HI$_{1630/1090}$ varies in a larger range than for all peat samples with a C content larger than 0.3 g g$^{-1}$, whereas all models accurately reproduce that the samples are not decomposed (Fig. \@ref(fig:dd-plot-11)).
+
+(ref:dd-plot-12-caption) Relation of decomposition indicators to the measured degree of decomposition for samples from litterbag experiments. For *P. australis* rhizomes, we additional differentiate between initial N contents (low, medium, and high N content) because of the contrasting response of high-N rhizomes. Parameter $\rho$ is the Pearson correlation computed with average values (not considering measurement or prediction errors). "Reliability" refers to how reliable the decomposition indicator values are. MIRS predicted variables are less reliable when they are not in the prediction domain, making some of our analyses more speculative than others. For *Phragmites australis*, $\delta^{13}$C and $\delta^{15}$N values are predicted from MIRS. All values for O/C, H/C, $\Delta$G$_\text{f}^0$, and NOSC are predicted from MIRS.<!-- The last panel shows the degree of decomposition fitted by model `r dd_model_names(3, dd_model_info)` as comparison [---todo: better than showing fitted values is to show predictions for hold out folds during cross-validation. I should add that!].--> Error bars are standard deviations, lines and shaded areas are ordinary least squares linear regression model averages and 95% confidence intervals. 
+
+```{r dd-plot-12, fig.cap='(ref:dd-plot-12-caption)', out.width='100%'}
+knitr::include_graphics(tar_read(dd_plot_12))
+```
+
+(ref:dd-plot-11-caption) HI$_{1630/1090}$, measured (or known) degree of decomposition, and degree of decomposition predicted by all models for undecomposed litter samples in stratified CV. The orange bar gives the range of HI$_{1630/1090}$ (times 100) for all peat samples analyzed in this study with a C content larger than 0.3 g g$^{-1}$. This allows to compare differences in HI$_{1630/1090}$ caused by differences in the chemistry of undecomposed litter to differences in HI$_{1630/1090}$ caused by differences due to decomposition. Taxa are arranged by their median N$_\text{MIRS}$ content (largest median N$_\text{MIRS}$ at the top) and points for HI$_{1630/1090}$ are scaled by their N$_\text{MIRS}$.
+
+```{r dd-plot-11, fig.cap='(ref:dd-plot-11-caption)', out.width='100%'}
+knitr::include_graphics(tar_read(dd_plot_11))
+```
+
+
+<!--For peat samples, scatterplots and Pearson correlations agree with the analysis for litter samples, bulk density shows the expected positive correlation to the degree of decomposition and dependence on mineral contents (e.g. bottom layers of the core from the forested subsite of the Venner Moor), and the relations vary between cores and core sections, as expected from previous studies (Fig. \@ref(fig:dd-plot-6-1-2)). Also as expected, samples with larger mineral contents (C$_\text{MIRS}$ < 0.3 g$_\text{C}$ g$_\text{sample}^{-1}$) are outliers for HI$_{1630/1090}$ and decomposition indicators predicted from models not trained with mineral-rich samples (O/C, H/C, $\Delta$G$_\text{f}^0$). Samples with small estimated degree of decomposition in cores with macrofossil observations indicate, similarly to the litter samples, that the decomposition indicators confound differences in litter chemistry with decomposition (Fig. \@ref(fig:dd-plot-6-1-2)).
+
+(ref:dd-plot-6-1-2-caption) Relation of decomposition indicators to the  degree of decomposition of peat samples predicted by model `r dd_model_names(2, dd_model_info)`. Columns are cores and rows are decomposition indicators. $\rho$ is the Pearson correlation computed with average values (not considering measurement or prediction errors) across all cores. "Reliability" refers to how reliable the decomposition indicator values are. MIRS predicted variables are less reliable when they are not in the prediction domain, making some of our analyses more speculative than others. All values for O/C, H/C, $\Delta$G$_\text{f}^0$, and NOSC are predicted from MIRS. For all other decomposition indicators, variable numbers of values were predicted from MIRS. Vertical error bars are standard deviations and horizontal error bars (for the predicted degree of decomposition are 50% prediction intervals).
+
+```{r dd-plot-6-1-2, fig.cap='(ref:dd-plot-6-1-2-caption)', out.width='100%'}
+knitr::include_graphics(tar_read(dd_plot_6_1)[[2]])
+```
+
+\clearpage-->
+
+<!--Using all peat samples, we analyzed how the suggested decomposition indicator is related to various other decomposition indicators measured for the same samples or predicted from MIRS. Pearson correlations have the expected sign (positive for bulk density, HI$_{1630/1090}$, $\delta^{15}$N, $\Delta$G$_\text{f}^0$; negative for C/N, H/C, O/C, $\delta^{13}$C, and NOSC) [---todo: ref figure]. Scatter plots show that the relations vary between cores and core sections, as expected from previous studies. Also as expected, samples with larger mineral contents (C$_\text{MIRS}$ < 0.3 g$_\text{C}$ g$_\text{sample}^{-1}$) are outliers for HI$_{1630/1090}$ and decomposition indicators predicted from models not trained with mineral-rich samples (O/C, H/C, $\Delta$G$_\text{f}^0$, $\delta^{13}$C, $\delta^{15}$N).
+
+Conducting the same analysis with the *Sphagnum capillifolium*, *Typha latifolia*, and *Phragmites australis* litter samples from @Arsenault.2024a and @Reuter.2020 while using the measured degree of decomposition produces patterns similar to the peat samples for the decomposed litter, and suggests that all of the analyzed decomposition indicators confound differences in litter chemistry between species and plant organs with decomposition. Similar patterns are visible for peat samples with macrofossil observations.-->  
+
+
+<!--Assuming that the suggested decomposition indicator (model ...) accurately describes the degree of decomposition, the scatterplots, together with macrofossil data, suggest that many decomposition indicators confound decomposition with differences in litter chemistry between species, in line with suggestions of previous studies. 
+
+
+For the two cores with macrofossil data, the decomposition indicator values of _undecomposed_ peat vary gradually between hummock *Sphagnum* peat at the one extreme and sedge or lawn and hollow *Sphagnum* peat at the other extreme (models ... and ...). Model ... predicts an on average larger degree of decomposition for many of these samples and therefore suggests a closer relation to the analyzed decomposition indicators except for C/N. We speculate that model ...  overestimates the degree of decomposition here, but currently our only clues for this hypothesis are that, as mentioned above, the prediction domain of model ... is more representative for undecomposed peat samples, and that we used a diverse set of undecomposed litter samples to compute the models.-->
+
+<!--The relation of H/C and O/C to the suggested decomposition indicator are consistent with current understanding of peat decomposition: O/C and H/C decrease as decomposition starts because of the preferential decomposition of hemicellulose that has more O and H relative to C than most other compounds.-->
+
+## Reconstruction of past average *Sphagnum* NPP
+
+```{r}
+dd_reconstruction_initial_mass_rate_1_summary <- 
+  dd_reconstruction_initial_mass_rate_1 |>
+  dplyr::select(taxon_rank_value, core_label, id_model, degree_of_decomposition, initial_mass_rate, degree_of_decomposition_in_pd) |>
+  dplyr::group_by(taxon_rank_value, core_label, id_model) |>
+  dplyr::summarise(
+    dplyr::across(
+      dplyr::all_of(c("degree_of_decomposition", "initial_mass_rate")),
+      posterior::rvar_mean
+    ),
+    degree_of_decomposition_in_pd = sum(degree_of_decomposition_in_pd)/length(degree_of_decomposition_in_pd),
+    .groups = "drop"
+  )
+```
+
+
+Table \@ref(tab:dd-tab-dd-reconstruction-initial-mass-rate-1) summarizes estimates of past *Sphagnum* NPP for each core and species or species group, using the degree of decomposition estimated by each of the three models, and Fig. \@ref(si-fig:dd-plot-20) shows estimates for individual layers versus time. Since all analyzed layers have a relative small degree of decomposition, according to all models, the estimates do not differ much between models when their errors are considered. However, since model `r dd_model_names(3, dd_model_info)` estimates a somewhat larger average degree of decomposition with larger prediction errors for more decomposed peat samples, and we divide by one minus the degree of decomposition, NPP estimates have larger errors for model `r dd_model_names(3, dd_model_info)` with long right tails and therefore upper 95% interval values up to `r dd_reconstruction_initial_mass_rate_1_summary |> dplyr::filter(id_model == 3) |> dplyr::mutate(initial_mass_rate = initial_mass_rate |> magrittr::divide_by(1000) |> posterior::quantile2(probs = 0.975)) |> dplyr::pull(initial_mass_rate) |> max() |> round(1)` kg m$^{-2}$ yr$^{-1}$.
+
+(ref:tab-dd-tab-dd-reconstruction-initial-mass-rate-1-caption) Estimated average NPP (kg m$^{-2}$ yr$^{-1}$) for different *Sphagnum* species or species groups in layers of three peat cores and using the degree of decomposition predicted by the three models. Values are given as averages and boundaries of 95% prediction intervals and are averages of of the average NPP for individual layers for the same model, species or species group, and core. Superscripts are levels for the fraction of layers within the prediction domain for the prediction models: $^1$: $[0, 50]$%, $^2$: $(50, 80]$%, $^3$: $(80, 100]$%.
+
+```{r dd-tab-dd-reconstruction-initial-mass-rate-1, tab.cap='(ref:tab-dd-tab-dd-reconstruction-initial-mass-rate-1-caption)', message=FALSE, warning=FALSE}
+dd_reconstruction_initial_mass_rate_1_summary |>
+  dplyr::mutate(
+    degree_of_decomposition = degree_of_decomposition * 100,
+    initial_mass_rate = initial_mass_rate / 1000,
+    degree_of_decomposition_in_pd =
+      dplyr::case_when(
+        degree_of_decomposition_in_pd <= 0.5 ~ "1", 
+        degree_of_decomposition_in_pd <= 0.8 ~ "2", 
+        TRUE ~ "3"
+      ),
+    dplyr::across(
+      dplyr::all_of(c("degree_of_decomposition", "initial_mass_rate")),
+      function(.x) {
+        digits =
+          switch(
+            dplyr::cur_column(),
+            "degree_of_decomposition" = 0,
+            "initial_mass_rate" = 1
+          )
+        paste0(.x |> mean() |> round(digits), " (", .x |> posterior::quantile2(probs = 0.025) |> round(digits), ", ", .x |> posterior::quantile2(probs = 0.975) |> round(digits), ")$^{", degree_of_decomposition_in_pd, "}$")
+        }
+    ),
+    core_label =
+      dplyr::case_when(
+        core_label == "eb1005_MH1" ~ "MH1",
+        core_label == "eb1006_MK1" ~ "MK1",
+        core_label == "eb1018_OD2" ~ "OD2"
+      ) |>
+      factor(levels = c("MH1", "MK1", "OD2")),
+    taxon_rank_value =
+      paste0("$", taxon_rank_value, "$") |>
+      stringr::str_replace_all(" ", "~")
+  ) |>
+  dplyr::arrange(taxon_rank_value, core_label, id_model) |>
+  dplyr::select(-degree_of_decomposition, -degree_of_decomposition_in_pd) |>
+  tidyr::pivot_wider(
+    names_from = "id_model",
+    values_from = "initial_mass_rate"
+  ) |>
+  kableExtra::kable(
+    format = "latex",
+    booktabs = TRUE, 
+    longtable = FALSE,
+    escape = FALSE, 
+    row.names = FALSE,
+    col.names = c("Species group", "Core", 1:3)
+  ) |>
+  kableExtra::kable_styling(latex_options = c("scale_down")) |>
+  kableExtra::add_header_above(c(" " = 2, "Model" = 3)) |>
+  kableExtra::collapse_rows(1, latex_hline = "none", valign = "top") |>
+  kableExtra::row_spec(0, align = "c")
+```
+
+
+# Discussion
+
+In order to improve peatland models and the interpretation of peat cores, we suggested properties of an ideal decomposition indicator and based on this developed models that predict the degree of decomposition ($\gamma$) in litterbag experiments from MIRS ($\gamma_\text{MIRS}$). In addition, we analyzed how other commonly used decomposition indicators (C/N, H/C, O/C, $\delta^{13}$C, $\delta^{15}$N, HI$_{1630/1090}$, $\Delta$G$_\text{f}^0$, and NOSC) relate to $\gamma$. This allows us to better illustrate limitations of existing decomposition indicators (subsection \@ref(dd-discussion-other-di-1)), in particular how they confound differences in litter chemistry with decomposition, than previous studies and to evaluate our prediction models and advantages and disadvantages of $\gamma_\text{MIRS}$ (subsections \@ref(dd-discussion-gamma-mirs-advantages-1) and \@ref(dd-discussion-gamma-mirs-model-evaluation-1)). We argue that $\gamma_\text{MIRS}$ has advantages as qualitative and also as absolute decomposition indicator. At the same time, improvements of the prediction models is desirable to better achieve these advantages and we outline opportunities to do so (subsection \@ref(dd-discussion-improvements)).  
+We also identified a new source of error of many decomposition indicators, including $\gamma_\text{MIRS}$: the underestimation of $\gamma$ in multi-component systems, and analyzed in detail the magnitude of this bias depending on the degree of decomposition and relative proportions of the components. When the aim is to estimate the degree of decomposition on an absolute scale, this bias cannot be neglected, and it will also distort interpretation of qualitative decomposition indicators because the bias is not linear. In subsection \@ref(dd-discussion-gamma-mirs-bias), we present strategies how to avoid or correct this bias in different settings. Using one of these strategies, we estimated the degree of decomposition of *Sphagnum* species in layers up to several thousand years old from three peat cores and also reconstruct their NPP (subsection \@ref(dd-discussion-naive-reconstruction)). In addition, we discuss how a multi-component analysis of $\gamma_\text{MIRS}$ can be used to estimate litter-specific decomposition rates and the slow-down of decomposition due to increasing litter recalcitrance (subsection \@ref(dd-discussion-analysis-of-long-term-decomposition)), both factors that introduce large errors into peat accumulation simulated with process models [@Frolking.2001; @Quillet.2013; @Teickner.2025f] and that are assumed to not be measurable with litterbag experiments or peat accumulation data [@Clymo.1998; @Frolking.2001; @Teickner.2025]. Thus, $\gamma_\text{MIRS}$ can be useful to improve process models, and $\gamma_\text{MIRS}$ may be an alternative or supplement to process models for the reconstruction of past NPP from peat cores.  
+
+
+<!--When estimating the degree of decomposition of a peat sample, the bias can be avoided by estimating the degree of decomposition for each component of a peat sample with $\gamma_\text{MIRS}$; when testing peatland models, the bias can simply be included in the model without losing information; with bulk peat measurements, the degree of decomposition can be estimated with small errors under some conditions that we identify based on our simulation analyses (subsection ... [---todo]). Based on this, we estimate the degree of decomposition of *Sphagnum* species in layers up to several thousand years old from three peat cores and also reconstruct their NPP (subsection ... [---todo]).-->  
+
+
+<!--We will discuss the results of our analysis of this issue and give recommendations adding to those already given in the Introduction for using $\gamma_\text{MIRS}$ and how better approximations may be achieved with future research. Using this knowledge, we estimated the degree of decomposition of *Sphagnum* species and their NPP during several periods in the Holocene.
+
+We have developed models that predict the degree of decomposition from MIRS ($\gamma_\text{MIRS}$) that were preprocessed in different ways and conducted quantitative and qualitative checks for predictive accuracy and robustness under extrapolation, considering differences in nitrogen contents, mineral contents, and mixtures of undecomposed and very decomposed samples. Here, we discuss to what extent these models fulfill properties of an ideal decomposition indicator, how their predictions compare among each other, how they can be improved, and what the advantages and disadvantages of $\gamma_\text{MIRS}$ are compared to other decomposition indicators.
+
+To explore how well other commonly used decomposition indicators (C/N, H/C, O/C, $\delta^{13}$C, $\delta^{15}$N, HI$_{1630/1090}$, $\Delta$G$_\text{f}^0$, and NOSC) are related to the degree of decomposition, we used scatterplots and Pearson correlation of these decomposition indicators versus measured degree of decomposition for the litter data and explored how the relations vary between litter types. For HI$_{1630/1090}$, we also estimated its variability for undecomposed litter compared to the peat samples analyzed in this study. We discuss, what these results imply for the suitability of these peat properties as decomposition indicators. 
+
+In the Introduction, we described the issue that decomposition indicators whose signal depends on the amount of organic matter remaining will underestimate the degree of decomposition of a peat sample even when the same decomposition indicator perfectly fits the degree of decomposition for individual components of the sample. $\gamma_\text{MIRS}$ is not immune to this issue, but there are strategies that either avoid this problem or allow to use $\gamma_\text{MIRS}$ to estimate the degree of decomposition of the sample or a dominant component. We will discuss the results of our analysis of this issue and give recommendations adding to those already given in the Introduction for using $\gamma_\text{MIRS}$ and how better approximations may be achieved with future research. Using this knowledge, we estimated the degree of decomposition of *Sphagnum* species and their NPP during several periods in the Holocene.-->
+
+
+<!--To develop and evaluate a decomposition indicator that directly estimates the degree of decomposition of individual litter types, is testable against litterbag experiments, does not confound differences in the chemistry of undecomposed litter with decomposition, and is easy to measure, we computed models that predict the degree of decomposition from MIRS that were preprocessed in different ways and conducted quantitative and qualitative checks for predictive accuracy and robustness under extrapolation, considering differences in nitrogen contents, mineral contents, and mixtures of undecomposed and very decomposed samples. These analyses suggest that the models make qualitatively sensible predictions for peat, do not confound differences in the chemistry of undecomposed litter with decomposition, and are robust against mineral additions in the sense that their prediction errors increase. Our analyses also suggest differences between the models and identify limitations that we elaborate in the following sections. We expect that many of these limitations can be addressed with additional training data.  
+ 
+To explore how well other commonly used decomposition indicators (bulk density, C/N, H/C, O/C, $\delta^{13}$C, $\delta^{15}$N, HI$_{1630/1090}$, $\Delta$G$_\text{f}^0$, and NOSC) are related to the degree of decomposition, we used scatterplots and Pearson correlation of these decomposition indicators versus measured or predicted degree of decomposition for the litter data and peat data and explored how they vary between litter types. For HI$_{1630/1090}$, we also estimated its variability for undecomposed litter compared to the peat samples analyzed in this study. We discuss, how reliable our findings are and what these results imply for the suitability of these peat properties as decomposition indicators.  
+We warn against a naive reconstruction of past NPP from peat masses and the suggested decomposition indicator and discuss approaches that avoid these problems. An error analysis suggests, however, that the naive approach can be used, under special conditions, to reconstruct *Sphagnum* NPP from whole layer masses and the degree of decomposition, with absolute bias smaller than 20%, which allowed us to estimate the NPP of *Sphagnum* species or species groups for three peat cores for some periods during the Holocene. Finally, we provide a list of future investigations to improve the suggested decomposition indicator. -->
+
+
+## Suitability of other decomposition indicators {#dd-discussion-other-di-1}
+
+```{r, eval = FALSE}
+d <- 
+  tidyr::expand_grid(
+    gamma_1 = seq(0, 0.999, by = 0.1),
+    gamma_2 = 0,
+    m_1_0 = seq(0.1, 100, length.out = 20)
+  ) |>
+  dplyr::mutate(
+    oc_0 = 0.3,
+    oc_1_1 = oc_0 + 4 * gamma_1,
+    oc_2_1 = oc_0 + 4 * gamma_2,
+    m_2_0 = 1,
+    m_0 = m_1_0 + m_2_0,
+    m_1_1 = m_1_0 * (1 - gamma_1),
+    m_2_1 = m_2_0 * (1 - gamma_2),
+    m_1 = m_1_1 + m_2_1,  
+    mf_1_1 = m_1_1/m_1,
+    oc_1 = (oc_1_1 * m_1_1 + oc_2_1 * m_2_1) / m_1,
+    oci_1 = oc_0 * m_0 / m_1,
+    gamma_oci = 1 - oc_0/oci_1,
+    gamma_oc = (oc_1 - oc_0) / 4,
+    gamma = (gamma_1 * m_1_0 + gamma_2 * m_2_0) / m_0,
+    gamma_mirs = (gamma_1 * m_1_1 + gamma_2 * m_2_1) / m_1
+  )
+```
+
+Many other peat properties have been suggested as decomposition indicators. Unlike previous studies, we directly analyzed how C/N and humification indices (e.g., HI$_{1630/1090}$) confound differences in the chemistry of undecomposed litter with decomposition. Our results suggest that C/N and HI$_{1630/1090}$ vary as much for undecomposed litter samples as for the peat samples analyzed in this study (Fig. \@ref(fig:dd-plot-11)). This is because of the large variability of N and protein contents in litter of different species grown under different conditions [e.g., @Limpens.2003] (in particular, for the *P. australis* rhizomes grown under different N supply [@Reuter.2020]), the variability of aromatic contents, and because of the contribution of both aromatics and proteins to MIRS intensities at 1510 and 1630 cm$^{-1}$ [@Stuart.2004]. In addition, for C/N, one also needs to consider that, when C/N is small, much more C needs to be lost to change C/N by one unit, than when C/N is large. This implies larger slopes of C/N versus degree of decomposition for litter with large initial C/N, as observable in Fig. \@ref(fig:dd-plot-12), unless N is lost at a larger rate, which may even reverse the relation of C/N and HI$_{1630/1090}$ to the degree of decomposition, as is the case for high-N *P. australis* rhizomes (Fig. \@ref(fig:dd-plot-12)). For similar reasons as for C/N and HI$_{1630/1090}$, $\delta^{13}$C and $\delta^{15}$N also confound differences in the chemistry of undecomposed litter with decomposition (Fig. \@ref(fig:dd-plot-12)) [@Asada.2005; @Asada.2005a; @Bowling.2008].  
+Theory suggests that O/C, H/C, and NOSC decrease during decomposition due to loss of carbohydrates (rich in H and O) and relative accumulation of aromatics (rich in C) and theory suggests that, because of the larger relative loss of more oxidized compounds which implies a more positive enthalpy of formation [e.g., @Popovic.2019], $\Delta$G$_\text{f}^0$ increases during decomposition. The sign of the relations to the degree of decomposition in our analysis of litterbag and peat samples agrees with theory (Fig. \@ref(fig:dd-plot-12)), indicating that, even though O/C, H/C, NOSC, and $\Delta$G$_\text{f}^0$ were predicted from MIRS and the spectra are different from the respective training data, relative differences between predictions of these decomposition indicators for the same litter type are not obviously wrong.    
+Theory also suggests that O/C, H/C, NOSC, and $\Delta$G$_\text{f}^0$ confound differences in the chemistry of undecomposed litter with decomposition because we know that different species (or organs of the same plant) differ in the relative fraction of holocellulose, lignin, and lipids [e.g., @Scheffer.2001; @Bengtsson.2018], we know that holocellulose, lignin, and lipids differ in their H/O/C stoichiometry, NOSC is computed from this stoichiometry [@Masiello.2008; @LaRowe.2011], and we know that $\Delta$G$_\text{f}^0$ is mostly controlled by the number of electrons transferred during oxidation which also depends on the H/O/C stoichiometry [@Thornton.1917; @Patel.1981; @Popovic.2019]. It is thus known that O/C, H/C, NOSC, and $\Delta$G$_\text{f}^0$ confound differences in the chemistry of undecomposed litter with decomposition, but not how large the difference is for different species. Based on our analysis, we suggest that relative differences in O/C, H/C, NOSC, and $\Delta$G$_\text{f}^0$ across different undecomposed litter types are similar to that in C/N and HI$_{1630/1090}$, meaning that they may cover the range of changes observable when one specific litter type is decomposed (Fig. \@ref(fig:dd-plot-12)). This hypothesis needs to be tested with direct measurements or with more information about the robustness of the irpeat models under extrapolation.<!-- because our analyses for the relation between O/C, H/C, NOSC, and $\Delta$G$_\text{f}^0$ to the degree of decomposition are currently not reliable.-->  
+All previously suggested decomposition indicators that we analyzed here measure a peat property that changes nonlinearly when another component with different degree of decomposition is added to a sample. This is because each of them is a quantity normalized by one of: the total amount of C (O/C, H/C, NOSC, $\Delta$G$_\text{f}^0$), the total amount of N (C/N), the amount of a specific stable isotope ($\delta^{13}$C, $\delta^{15}$N), or the total amount of molecular structures (HI$_{1630/1090}$). Therefore, all these decomposition indicators will underestimate the degree of decomposition in multi-component systems in the same way as $\gamma_\text{MIRS}$, as outlined in the Introduction, analyzed in sections \@ref(dd-methods-bias-simulations) and \@ref(dd-methods-bias-simulations-results), and described by equation \@ref(eq:eq-dd-gamma-bias-3). To our knowledge, this problem has not been described before, as it is not mentioned in recent reviews of decomposition indicators [e.g., @Biester.2014; @Zaccone.2018]; we suggest that this is because decomposition indicators have not been directly compared against $\gamma$, except perhaps in litterbag experiments, where the problem does not occur. Thus, any of the decomposition indicators analyzed here will be nonlinearly related to $\gamma$ in multi-component systems (where the components have a different degree of decomposition), even when they would be linearly related to $\gamma$ for each component individually. The only way to avoid this bias with bulk measurements is to use an approach similar to the ash residue method, where the signal (the mass of ash) changes linearly when other components are added to the sample.  
+In summary, our study illustrates how C/N, humification indices, $\delta^{13}$C, $\delta^{15}$N, O/C, H/C, NOSC, and $\Delta$G$_\text{f}^0$ confound differences in the chemistry of undecomposed litter with decomposition in one- and two-component systems. This confounding factor is either known empirically or can be deduced from theory, but previous reviews of decomposition indicators [@Biester.2014; @Zaccone.2018] did not estimate how much this factor contributes to the variability of the decomposition indicators and they did not consider how $\gamma$ is underestimated in multi-component systems. Whereas our collection of litter samples may exaggerate differences between litter chemistry that are expected in natural vegetation shifts in peatlands, because hummock *Sphagnum* species will not directly replace *P. australis*, and some of our analyses could be refined empirically, it illustrates the need to check, during each application of the analyzed decomposition indicators, that these decomposition indicators do not confound differences in litter chemistry with decomposition, it illustrates the inability of many decomposition indicators to compare the degree of decomposition between peatland types, and it illustrates that many decomposition indicators underestimate $\gamma$ for multi-component systems. The last point is, of course, less relevant when decomposition indicators are only used in a qualitative way, but it makes it likely that the decomposition indicators are nonlinearly related to the degree of decomposition for bulk peat which makes comparing values, even only in a qualitative way, less straightforward.  
+Since these confounding factors depend on differences in the chemistry of undecomposed litter, since these differences can be quite complex, and since, typically, chemical properties are used to evaluate the degree of decomposition of peat, it is unlikely that a directly measurable peat property or a simple transformation of measurable peat properties (e.g., humification indices, element ratios) can be an accurate decomposition indicator. In multi-component systems, there will be an additional bias due to the underestimation of the degree of decomposition. 
+
+<!--If it is true that not only C/N, humification indices, $\delta^{13}$C, $\delta^{15}$N, O/C, H/C, NOSC, and $\Delta$G$_\text{f}^0$ (and therefore also changes in $\Delta$G$_\text{f}^0$ as analyzed in some studies [@Worrall.2018; @Glatzel.2023]) confound differences in the chemistry of undecomposed litter with decomposition, studies that use these decomposition indicators have to rule out that vegetation shifts or differences in N mobilization, and not decomposition, cause patterns that are interpreted as decomposition. <!--The decomposition indicator suggested here (or an improved version of it) may be useful to distinguish effects of decomposition from effects of other factors on peat properties currently used as decomposition indicators.-->
+
+<!--[---todo: For P. australis litter chemistry see https://onlinelibrary.wiley.com/doi/epdf/10.1002/iroh.200410772?saml_referrer and https://www.sciencedirect.com/science/article/pii/S0304377006001021#aep-section-id14]-->
+
+
+
+## When does $\gamma_\text{MIRS}$ have advantages as decomposition indicator? {#dd-discussion-gamma-mirs-advantages-1}
+
+Tab. \@ref(tab:dd-table-1) summarizes which of the properties of an ideal decomposition indicator are fulfilled by different types of decomposition indicators. Compared to other decomposition indicators, the advantages and disadvantages of $\gamma_\text{MIRS}$ depend on whether the aim is to estimate the degree of decomposition on an absolute scale (absolute decomposition indicator) or to only have a qualitative decomposition indicator, and whether a one-component system (e.g., one litter type) or a multi-component system (peat sample consisting of more than one litter type) is analyzed.  
+When the aim is to use $\gamma_\text{MIRS}$ as qualitative decomposition indicator for a one-component system, there are a couple of advantages compared to qualitative decomposition indicators, such as C/N or humification indices: Unlike many qualitative decomposition indicators, $\gamma_\text{MIRS}$ is more consistent in estimating a small degree of decomposition for diverse types of undecomposed litter (Fig. \@ref(fig:dd-plot-12) and \@ref(fig:dd-plot-11)). This makes values of $\gamma_\text{MIRS}$ more comparable between different samples from one or different peat cores. Unlike humification indices, $\gamma_\text{MIRS}$ indicates that it cannot accurately predict the degree of decomposition when a sample has a large mineral content.  
+For a multi-component system, $\gamma_\text{MIRS}$ retains these advantages as qualitative decomposition indicator, except that values are not directly comparable between samples with differences in the relative proportions and degrees of decomposition of different components (Tab. \@ref(tab:dd-table-1)). However, as discussed in the previous section, the majority of other decomposition indicators shares this limitation. Thus, if MIRS are measured anyways for a sample, $\gamma_\text{MIRS}$ is a better alternative as a qualitative decomposition indicator than humification indices. If not confounding differences in litter chemistry with decomposition is critical (for example because contrasting systems are analyzed and compared), $\gamma_\text{MIRS}$ may also be more useful than other decomposition indicators that do not have this property, for example C/N.  
+The main advantage of $\gamma_\text{MIRS}$ is that it is the only absolute decomposition indicator we are aware of, besides $\gamma_\text{ARM}$, and may therefore help to address some fundamental research questions on long-term dynamics of decomposition and NPP, as outlined in the Introduction. When one-component systems are analyzed, $\gamma_\text{MIRS}$ shares all advantages of $\gamma_\text{ARM}$ and in addition does not require us to know the initial state of the sample, which is a large error source of $\gamma_\text{ARM}$, as mentioned in the Introduction (Tab. \@ref(tab:dd-table-1)). For more decomposed samples, $\gamma_\text{MIRS}$ may have larger errors than $\gamma_\text{ARM}$ because of prediction errors and because the models developed here were not trained on samples with large degree of decomposition which causes comparatively large extrapolation errors.  
+When multi-component systems are analyzed, $\gamma_\text{ARM}$ is not biased because the mass of ash is independent of the degree of decomposition of the sample or its components. In contrast, $\gamma_\text{MIRS}$ underestimates the degree of decomposition (Fig. \@ref(fig:dd-plot-22) and \@ref(fig:dd-plot-23-2)), but this bias can be addressed when using $\gamma_\text{MIRS}$ to test peatland models, or it can be avoided by a component-specific analysis, if one is willing to add extra effort during the laboratory analyses; in both cases, $\gamma_\text{MIRS}$ will retain the possible advantage of smaller errors because no initial states of the sample need to be estimated. As mentioned in the Introduction, a component-specific analysis offers novel ways to better test peatland models, reconstruct past NPP from peat cores without process models, and analyze peat core data over time ranges previously inaccessible except with computer simulations. Thus, $\gamma_\text{MIRS}$ has merits both when used as qualitative decomposition indicator and, in particular, when quantitative analyses and reconstructions are needed.  
+
+<!--Well-tested Decomposition indicators that estimate the degree of decomposition on an absolute scale are needed for progress in interpreting peat cores and understanding the processes that formed it. A good example for this is that $\gamma_\text{MIRS}$ allowed us to detect this bias and, likewise, other error sources -->
+
+
+
+## Evaluation of the prediction models for $\gamma_\text{MIRS}$ {#dd-discussion-gamma-mirs-model-evaluation-1}
+
+The advantages of $\gamma_\text{MIRS}$ depend on how accurate we can predict $\gamma_\text{MIRS}$ for individual litter types. Our model evaluation addressed this question by estimating the predictive performance for novel data, testing qualitative model behavior for samples with large mineral contents, samples where a decomposed component is added, and how proteins may bias predictions. There are both encouraging results and open limitations that can be addressed in future studies to improve the models. Encouraging results are:
+
+1. All models make accurately fit the training data. In particular, they accurately estimate a small degree of decomposition for a diverse set of undecomposed litter samples, unlike humification indices, and they accurately fit the degree of decomposition for litter types from different species and with different degree of decomposition.
+
+2. Our residual analysis suggests that, for the training data, models `r dd_model_names(2, dd_model_info)` and `r dd_model_names(3, dd_model_info)` at most slightly confound differences in N content with decomposition. There is some indication that model `r dd_model_names(1, dd_model_info)` confounds differences in N content with decomposition, but it may be possible to address this limitation with more training data from decomposed samples.  
+
+3. For mixtures of spectra with larger mineral contents than in the training data, all models estimate large prediction errors and prediction intervals that cover all possible values of the degree of decomposition. While it may not be the case that including training data with mineral admixtures can improve the predictive accuracy because of complex interference between infrared peaks caused by minerals and organic matter [e.g., @Stuart.2004; @Parikh.2014], the large prediction errors avoid misinterpretations and therefore are an improvement over humification indices, which estimate a smaller degree of decomposition for peat samples with large mineral contents [e.g., @Broder.2012].
+
+4. For mixtures of spectra of undecomposed litter with a very decomposed peat sample, models `r dd_model_names(2, dd_model_info)` and `r dd_model_names(3, dd_model_info)` correctly predicted increasing degrees of decomposition the more of the peat sample was added. Moreover, the models correctly identified peat layers with large degree of decomposition in drained peat cores as well as a small degree of decomposition in layers formed since rewetting and, based on C/N, humification indices, and photographs, less decomposed peat not impacted by drainage. This suggests that $\gamma_\text{MIRS}$ can be used as qualitative decomposition indicator because it makes sensible predictions undecomposed litter and for more decomposed peat, despite the lack of training data and the underestimation of $\gamma$ for multi-component systems; these results indicate that $\gamma_\text{MIRS}$ can identify qualitative differences in the degree of decomposition similar to existing decomposition indicators while having advantages that were discussed in subsection \@ref(dd-discussion-gamma-mirs-advantages-1).
+
+Limitations are:
+
+1. Currently, it is difficult to recommend a best model because the models have trade-offs that need to be evaluated with additional data. Our recommendation is to consider the variability of model predictions until further tests have been performed (see subsection \@ref(dd-discussion-improvements)).  
+Model `r dd_model_names(1, dd_model_info)` fits the data worse and underestimates the degree of decomposition most for *T. latifolia* and *S. capillifolium* samples with N content < 0.02 g g$^{-1}$ and therefore probably underestimates the degree of decomposition for many peat samples and compared to the other two models. However, it has the best average predictive performance in the stratified CV, which we think best approximates possible applications of the models to peat samples, and it is also the model that confounds the least differences in initial litter chemistry with decomposition in the CV (Fig. \@ref(fig:dd-plot-15)).  
+Model `r dd_model_names(3, dd_model_info)` overfits the data most, based on the stratified CV, and confounds the most differences in initial litter chemistry with decomposition in the CV (Fig. \@ref(fig:dd-plot-15)), but when trained on all data, it fits the degree of decomposition best and does not confound difference in the chemistry of decomposed litter with decomposition, and it does not underestimate the degree of decomposition for *T. latifolia* and *S. capillifolium* samples with N content < 0.02 g g$^{-1}$.  
+In all aspects mentioned in the previous two points, model `r dd_model_names(2, dd_model_info)` is intermediate between the other two models and in addition has the best average predictive performance in the stratified CV. However, even though 95% prediction intervals also cover the complete possible range for samples with large mineral contents, the median predicted degree of decomposition and bulk of the posterior distribution decrease the more minerals are within a sample. 
+
+2. For most peat samples, the models extrapolate because the spectra are different from those of the training data. Application of the models to the peat samples suggest that in many of these cases the peat samples are more decomposed. The extrapolation risk can therefore be reduced with litterbag data from more diverse litter types and long-term litterbag experiments that produce highly decomposed litter (see Section \@ref(dd-discussion-improvements)).
+
+The next subsection gives recommendations how these limitations can be addressed.
+
+
+<!--1. For most peat samples, the models extrapolate because the spectra are different from those of the training data. Application of the models to the peat samples suggest that in many of these cases the peat samples are more decomposed. The extrapolation risk can be reduced with litterbag data from more diverse litter types and long-term litterbag experiments that produce highly decomposed litter (see Section \@ref(discussion-improvements)).
+
+2. Model `r dd_model_names(1, dd_model_info)` has a worse fit to the data and underestimates the degree of decomposition most for *T. latifolia* and *S. capillifolium* samples with N content < 0.02 g g$^{-1}$ (and therefore probably underestimates the degree of decomposition for many peat samples and compared to the other two models), but it has the best average predictive performance in the stratified CV, which we think best approximates possible applications of the models to peat samples, and it is also the model that confounds the least differences in initial litter chemistry with decomposition in the CV (Fig. \@ref(fig:dd-plot-15)).
+
+3. Model `r dd_model_names(3, dd_model_info)` overfits the data most, based on the stratified CV, and confounds the most differences in initial litter chemistry with decomposition in the CV (Fig. \@ref(fig:dd-plot-15)), but when trained on all data, it fits the degree of decomposition best and does not confound difference in the chemistry of decomposed litter with decomposition, and it does not underestimate the degree of decomposition for *T. latifolia* and *S. capillifolium* samples with N content < 0.02 g g$^{-1}$.
+
+4. In all aspects mentioned in the previous two points, model `r dd_model_names(2, dd_model_info)` is intermediate between the other two models and in addition has the best average predictive performance in the stratified CV. However, even though 95% prediction intervals also cover the complete possible range for samples with large mineral contents, the median predicted degree of decomposition and bulk of the posterior distribution decrease the more minerals are within a sample.
+
+5. Some of the litter samples that we classified as undecomposed may have already experienced some initial decomposition, in particular the *Sphagnum* samples for which it is difficult to distinguish dead-but-undecomposed from decomposed parts. We therefore suggest future studies to test whether the models indeed underestimate the degree of decomposition for undecomposed *Sphagnum* litter.-->
+
+<!--5. Much smaller predictions of the degree of decomposition for many peat samples by model `r dd_model_names(1, dd_model_info)` than by models `r dd_model_names(2, dd_model_info)` and `r dd_model_names(3, dd_model_info)` can be explained away by the identified bias of model `r dd_model_names(1, dd_model_info)` for samples with intermediate degree of decomposition and N content smaller than 0.02 g g$^{-1}$. Moreover, as small degrees of decomposition as predicted by model `r dd_model_names(1, dd_model_info)` would disagree with those estimated in (conceptual) modeling studies [@Clymo.1984; @Ramirez.2023] and expected based on decomposition rates estimated from litterbag experiments [---todo:ref]. It is thus encouraging that models `r dd_model_names(2, dd_model_info)` and `r dd_model_names(3, dd_model_info)` produce predictions that are more consistent with each other and previous studies when applied to peat samples.--> 
+
+
+<!--The suggested decomposition indicator has several advantages over previously suggested decomposition indicators by design: it is an estimate for the degree of decomposition of individual litter types, directly testable against litterbag data, and should be able to make accurate predictions and not confound differences in the chemistry of undecomposed litter between species with decomposition mass losses because the models use whole mid infrared spectra and regularization to identify relevant predictor variables, and was trained on undecomposed litter samples with large differences in their chemistry. Our robustness analyses suggest that some of these advantages could be realized with the available training data and our modeling approach, but it also identified remaining limitations. An overview on these properties is given in Tab. \@ref(tab:dd-table-1). Encouraging results are:
+
+
+
+
+
+It is important to note that, even though there are differences in the predictive accuracy of the models, these differences often should not result in different conclusions, when prediction errors are considered. We are therefore more concerned with the extrapolation risk, which we could analyze only qualitatively because of missing data (untested litter types, large mineral contents, more decomposed peat) and the issue that $\gamma_\text{MIRS}$ underestimates the degree of decomposition in peat samples containing several components. It is therefore difficult to give recommendations which model makes the most accurate predictions when applied to a litter or peat sample.
+
+Currently, we assume, because of our residual analysis and results from conceptual modeling studies in combination with predictions of model `r dd_model_names(1, dd_model_info)` for peat cores, that model `r dd_model_names(1, dd_model_info)` underestimates, on average, the degree of decomposition of litter samples with an N content < 0.02 g g$^{-1}$ from species similar to *S. capillifolium* or *T. latifolia*, but because model `r dd_model_names(3, dd_model_info)` overestimated the degree of decomposition for some undecomposed litter with larger aromatic contents (e.g. shrub litter) during the CV, we cannot exclude that some of the predictions by model `r dd_model_names(3, dd_model_info)` are overestimates. Our recommendation therefore is to consider this variability, until further tests have been performed (see Section \@ref(discussion-improvements)).
+
+Since the limitations of the suggested decomposition indicator are shared with many (if not all) currently used decomposition indicators (see the next section), and the suggested decomposition indicator has advantages currently used decomposition indicators do not share (Tab. \@ref(tab:dd-table-1)), as mentioned above, the suggested decomposition indicator is a suitable addition to existing decomposition indicators. In contrast to existing decomposition indicators, the suggested decomposition indicator has a larger potential to cope with most unaddressed confounding factors. For example, while the CV indicated that the models are not robust for litter types the model was not trained with, the models can accurately reproduce a small degree of decomposition for a wide variety of litter types, something none of the decomposition indicators we are aware of has been tested, as far as we know. 
+
+This advantage is most obvious when comparing the suggested decomposition indicator with HI$_{1630/1090}$ (Fig. \@ref(fig:dd-plot-11)), and since both humification indices and the suggested decomposition indicator can be computed from MIRS and because the suggested decomposition indicator almost certainly is more robust against known confounding factors (large mineral contents, differences in protein contents), we suggest that it is sensible to replace humification indices as decomposition indicators by the suggested decomposition indicator.-->    
+
+
+
+<!--Overall, these experiments and analyses suggest that any of the computed models makes accurate predictions for undecomposed or not much decomposed peat, as long as mineral contents are low, that none of the model can predict degree of decomposition when mineral contents are too high, but this is indicated in a robust way by large prediction errors, and that model `r dd_model_names(1, dd_model_info)` underestimates the degree of decomposition for peat. For decomposed samples, the models make different predictions, which indicates, in combination with the difference in prediction domain coverage, some instability under extrapolation for decomposed peat with small mineral contents. Since the prediction intervals are, in most cases comparatively large and predictions do not differ significantly between models, additional litterbag data will be required to reduce this extrapolation risk and decide whether, for more decomposed samples, models `r dd_model_names(2, dd_model_info)` and `r dd_model_names(3, dd_model_info)` overestimate the degree of decomposition.--> <!--A residual analysis indicates that model ... may underestimate the degree of decomposition when the degree of decomposition is between ca. 20 and 40% and the N content smaller than ca. 0.02 g g$^{-1}$, unlike the other models.-->
+
+
+
+## How can we improve the suggested decomposition indicator? {#dd-discussion-improvements}
+
+The important idea of our study is to define the properties an ideal decomposition indicator must fulfill and then to develop a strategy to produce such an indicator. A main advantage of this strategy is that the models that predict $\gamma_\text{MIRS}$ can be directly tested in litterbag experiments because they make probabilistic predictions of the expected mass loss on an absolute scale. This offers the opportunity to vary litter type, sample preprocessing methods, and incubation environment in litterbag experiments, and thus to identify the conditions under which the models need to be improved.  
+As discussed in the previous subsection, the cross-validation indicates that, while the models are more robust for novel litter types than many existing decomposition indicators, the models may not in general be robust to novel litter types, in particular more decomposed samples of litter types not included in the training data. Our results also indicate proteins and minerals as potential confounding factors. This suggests the following potential studies to improve $\gamma_\text{MIRS}$:
+
+1. Litterbag experiments for litter types not yet included in the training data. This is, in particular: more decomposed hummock *Sphagnum* litter, litter from hollow and lawn *Sphagnum* species, litter from sedges and shrubs. These litterbag experiments should ensure that a large enough range of the degree of decomposition is considered. A possible confounding factor that needs to be addressed is initial leaching losses: if initial leaching losses due to sample preprocessing are different in magnitude and quality from initial leaching losses of unprocessed litter [@Barlocher.1997; @Teickner.2025], this may confound changes in MIRS during decomposition. 
+
+2. Litter from litterbag experiments can be mixed with different minerals, MIRS recorded for the different mixtures, and the models applied to these spectra. Since we already know that prediction errors of the models increase when mineral contents increase, such a study would mainly be interesting to test whether the models computed with the mineral-enriched samples as additional training data produce more accurate predictions for samples with different amounts of minerals.
+
+3. Litter of the same species with different protein content can be grown [e.g., @Reuter.2020] and litter of the same species can be decomposed under different environmental conditions that change relative rates of decomposition of different organic matter fractions (e.g., proteins, carbohydrates, etc. [@Benner.1984; @Reuter.2020]) to test whether differences in litter chemistry changes under such conditions confound predictions of the models.
+
+We proposed to use MIRS as predictor variables because MIRS provide information on many molecular structures and also structural integrity due to hydrogen bonds (e.g. crystalline vs amorphous fractions of cellulose [@Schmidt.2006] or hydrogen bonds of different stability between lignin molecules [@Kubo.2005]) which may change linearly with decomposition and can be sorted out in linear regression with regularizing priors. However, similar prediction models as proposed here could be developed using other peat properties as predictors, for example Nuclear Magnetic Resonance measurements [e.g., @Serk.2022a] or a combination of previously used decomposition indicators, and these may or may not have a better predictive accuracy than MIRS prediction models. To allow others to test and improve the suggested decomposition indicator, we published raw data, code, and the predictions models [@Teickner.2022d] [---todo:ref].
+
+
+## Estimating the degree of decomposition with $\gamma_\text{MIRS}$ in multi-component systems {#dd-discussion-gamma-mirs-bias}
+
+Our simulation analysis where we made predictions on mixed MIRS agrees with our theoretical analysis that $\gamma_\text{MIRS}$ underestimates the degree of decomposition when it is computed from a MIRS of the whole peat sample. The consistently more negative bias than theoretically expected (Fig. \@ref(fig:dd-plot-23-2)) may be explained by the following mechanism: Litterbag samples, when decomposed, are no mixtures of organic matter fractions with strongly different degree of decomposition because a uniform sample is decomposed in the same way. If mixtures as simulated here emphasize spectral features of undecomposed litter that are used for prediction, the models may underestimate $\gamma$ more than theoretically expected. For example, usually when carbohydrates are decomposed, lipids are selectively enriched and therefore carbohydrate peaks and lipid peaks are negatively related in a litterbag sample. However, mixing two components with different degree of decomposition may result in spectra that have both pronounced carbohydrate and lipid peaks because these are the dominant peaks in the undecomposed and decomposed fraction, respectively.  
+As outlined in the Introduction, there are three strategies to estimate the degree of decomposition of multi-component systems with $\gamma_\text{MIRS}$:
+
+1. The approach offering the greatest opportunities and completely avoiding the bias is a component-specific analysis: The components of a sample are separated, a MIRS is recorded for each component, and the degree of decomposition is estimated for each component with the models. If an estimate for the degree of decomposition of the sample is needed, this can be directly estimated from the measurements using equation \@ref(eq:eq-dd-gamma-bias-1). Future research is necessary to check whether it is possible to separate litter types from peat samples, such that this approach works in practice.
+
+2. For bulk peat, when not correcting the bias, $\gamma_\text{MIRS}$ can still be interpreted as the largest possible degree of decomposition of the least decomposed component and the smallest possible degree of decomposition of the most decomposed component.
+
+3. For bulk peat, when not correcting the bias but applying $\gamma_\text{MIRS}$ under certain conditions and interpretations, the bias is small enough to be acceptable for many purposes and in comparison to errors of the ash residue method. In these cases, $\gamma_\text{MIRS}$ is therefore a good approximation for $\gamma$ because the bias is small.  
+
+To concretize the third strategy, we suggest that only small errors are made for the following conditions and interpretations of $\gamma_\text{MIRS}$:
+
+1. Differences in the degree of decomposition of the components of a peat sample as large as in our theoretical simulation can occur when roots grow into decomposed peat. In this case, roots are the less decomposed component. Then, according to our simulation, if the mass fraction of the roots does not exceed `r dd_simulation_2_threshold_m_1_1_f_1`% and the remaining peat has a uniform degree of decomposition, then the expected bias is smaller than 10% (Fig. \@ref(fig:dd-plot-22)).
+
+2. The difference in the degree of decomposition of litter types decomposing under the same environmental conditions is, according to decomposition formulas used in conceptual and more mechanistic models [@Clymo.1984; @Frolking.2001], only a function of the litter-specific decomposition rate constants, which differ between litter types, and of the decomposition progress (the environmental modulation of the decomposition rate integrated over time), which is the same within a peat layer formed by aboveground parts (supporting section \@ref(si-dd-rate-differences-1)). This constrains the absolute difference of the degree of decomposition between the two components ($|\gamma_1 - \gamma_2|$) to a range often smaller than the extreme values in our simulation, and much smaller depending on the litter-specific decomposition rate constants, how much decomposition slows down during decomposition, and how far decomposition has proceeded (supporting Fig. \@ref(si-fig:dd-plot-25)). Since both potential litter-specific decomposition rates and how much decomposition slows down are not well known, we refrain from giving specific recommendations, but instead emphasize that component-specific analyses could provide this information and therefore help to establish rules of thumb when $\gamma_\text{MIRS}$ can be safel applied. Our simulation indicates that when $|\gamma_1 - \gamma_2| < 0.5$ g g$^{-1}$, $\gamma_1 < 0.9$, and $\gamma_2 < 0.9$, then the worst bias is around `r dd_simulation_2 |> dplyr::filter(! is.na(bias) & abs(gamma_1 - gamma_2) <= 0.5 & gamma_1 < 0.9 & gamma_2 < 0.9) |> dplyr::pull(bias) |> min() |> round(2)` g g$^{-1}$. Therefore, $|\gamma_1 - \gamma_2| < 0.5$ g g$^{-1}$, $\gamma_1 < 0.9$, and $\gamma_2 < 0.9$ appears to be a reasonable threshold for identifying conditions where $\gamma_\text{MIRS}(t)$ does not underestimate $\gamma(t)$ much.
+<!--Our simulation indicates that when $|\gamma_1 - \gamma_2| < 0.5$ g g$^{-1}$, $\gamma_1 < 0.9$, and $\gamma_2 < 0.9$, then the worst bias is around `r dd_simulation_2 |> dplyr::filter(! is.na(bias) & abs(gamma_1 - gamma_2) <= 0.5 & gamma_1 < 0.9 & gamma_2 < 0.9) |> dplyr::pull(bias) |> min() |> round(2)` g g$^{-1}$. Using the decomposition formula from @Frolking.2001 with different values for the litter-specific decomposition rate constants of the two components ($k_{0,1}, k_{0,2}$), different values for the parameter controlling slow-down of decomposition ($\alpha$), and different values for the decomposition progress ($p(t)$), we can check when $|\gamma_1 - \gamma_2| < 0.5$ g g$^{-1}$, $\gamma_1 < 0.9$, and $\gamma_2 < 0.9$.
+For a two-component system where component one has a decomposition rate constant of 0.01 yr$^{-1}$ and component 2 has a decomposition rate constant of 0.8 yr$^{-1}$, $|\gamma_1 - \gamma_2| < 0.5$ only for very decomposed peat or nearly undecomposed peat. When the difference in decomposition rate constants of the two components is less extreme, say $k_1 = 0.01$ yr$^{-1}$ and $k_1 = 0.3$ yr$^{-1}$-->
+
+3. When one of the two components has a mass fraction of at least `r dd_simulation_2_threshold_bias_gamma_1 * 100`%, $\gamma_\text{MIRS}(t)$ is mostly controlled by this dominant component and therefore a good estimate for the degree of decomposition of this one component (Fig. \@ref(si-fig:dd-plot-24)): Our simulation suggests that, in this case, the error when using the theoretical $\gamma_\text{MIRS}(t)$ as estimate for the degree of decomposition of the dominant component, will not exceed 10%, which seems to be an acceptable error compared to $\gamma_\text{ARM}$. Thus, under some conditions, $\gamma_\text{MIRS}(t)$ can be used as estimate for the degree of decomposition of a dominant component of a peat sample. This justifies our estimation of past *Sphagnum* NPP in peat layers where the volumetric fraction of *Sphagnum* is at least 90% (subsection \@ref(dd-methods-reonstruction-npp)).
+
+The next two subsections discuss how the last approach can be used to reconstruct Holocene *Sphagnum* NPP and to estimate decomposition rate differences between litter types and how much decomposition slows down as mass is lost.
+
+
+## Reconstruction of past net primary production from peat masses and the degree of decomposition {#dd-discussion-naive-reconstruction}
+
+Following the last recommendation in the previous subsection, we reconstructed the NPP of several *Sphagnum* species in peat layers with a *Sphagnum* volume fraction of at least 90% and a degree of decomposition likely smaller than 60%. According to our simulation, if the models predict $\gamma_\text{MIRS}$ perfectly, this will underestimate the NPP by at most 20%. We performed calculations with all three models and compared their predictions, as we recommended above, to consider the possible variability in the degree of decomposition and NPP. Our estimates cover the range of NPP for *S. fuscum* from different studies compiled by @Bona.2018 ($`r dd_data_bona2018_moss_npp_summary_1 |> dplyr::mutate(dplyr::across(dplyr::starts_with("npp"), function(.x) .x/1000), npp = paste0(round(npp_mean, 2), " \\pm ", round(npp_sd, 2))) |> dplyr::pull(npp)`$ kg $^{-1}$ yr$^{-1}$, average $\pm$ standard deviation) [`r dd_data_bona2018_moss_npp_summary_1 |> dplyr::mutate(reference_id = purrr::map(reference_id, function(.x) paste0("@", .x))) |> dplyr::pull(reference_id) |> unlist() |> unique() |> paste(collapse = "; ")`], and are contained in the wider NPP range measured in monospecific *S. fuscum* patches in @Bengtsson.2021 (`r dd_data_bengtsson2021_moss_npp_summary_1 |> dplyr::mutate(dplyr::across(dplyr::starts_with("npp"), function(.x) .x/1000), npp = paste0(round(npp_mean, 2), " \\pm ", round(npp_sd, 2))) |> dplyr::pull(npp)`) or other studies [@Wieder.2016; @Wieder.2019]. It is likely that samples with large proportion of one species (group) have been formed during periods where this species (group) had comparatively large NPP because otherwise it could not have become dominant. More accurate estimates can be obtained when bulk density is measured and not predicted from MIRS, as we did here.  
+It is likely that at least model `r dd_model_names(1, dd_model_info)` underestimates the degree of decomposition for many of these peat samples (because they have a small N content and probably average degree of decomposition, Fig. \@ref(fig:dd-plot-8)) and that model `r dd_model_names(3, dd_model_info)` overestimates the degree of decomposition for the more decomposed layers, meaning that the degree of decomposition likely is in-between the estimates of all three models. This could mean that hummock *Sphagnum* species can have a small mass loss even in peat thousands of years old.
+
+
+## Estimating differences of litter-specific decomposition rates and the slow-down of decomposition according to the Holocene Peatland Model {#dd-discussion-analysis-of-long-term-decomposition}
+
+The suggested decomposition indicator may also be useful to analyze decomposition rates under natural conditions and for time periods much longer than litterbag experiments. As for the reconstruction of NPP, naive approaches are not suitable because for each sample, we can only measure the state at one specific time point, but measurements of identical initial litter decomposed from the same time point on would be required to analyze data from peat cores in the same way as litterbag experiments. However, when environmental factors scale decomposition rates in the same way for different litter types, as assumed by decomposition modules of many peatland models, including the decomposition module in the Holocene Peatland Model [@Frolking.2001; @Frolking.2010], and if the degree of decomposition of two litter types from the same peat layer can be measured (for example with a component-specific analysis), it is possible to estimate the difference (or ratio) of the decomposition rates of the litter types (supporting section \@ref(si-dd-rate-differences-2)). This could be a useful alternative to direct litterbag experiments because it avoids possible biases in decomposition rate estimates in litterbag experiments due to sample preprocessing [@Barlocher.1997; @Koronatova.2010a; @Teickner.2025], and it may inrease the signal-to-noise ratio because litter type-specific differences may be better detectable over longer time periods. Moreover, analyzing peat samples with $\gamma_\text{MIRS}$ may be a faster alternative to litterbag experiments which may allow to obtain more precise average estimates for decomposition rates than with litterbag experiments.  
+An influential parameter in the Holocene Peatland Model is the rate at which decomposition slows down the more of the initial mass is lost ($\alpha$) [@Frolking.2010]. This parameter cannot be precisely estimated from peat cores or litterbag experiments [@Frolking.2001; @Teickner.2025] because they are too short to precisely estimate $\alpha$. When decomposition happens according to the decomposition module of the Holocene Peatland Model and litter-type specific decomposition rates under optimal conditions (conditions that maximize decomposition rates) are known, component-specific estimates for the degree of decomposition depend only on $\alpha$ (section \@ref(si-dd-rate-differences-2)). This approach may therefore be useful to estimate $\alpha$ from peat layers.   
+
+
+
+
+
+
+<!--To mention in the Discussion:
+- When initial leaching losses are, depending on sample preprocessing, different in litterbag experiments than for unprocessed litter, this may change the relation between litter chemistry and the degree of decomposition and therefore bias the suggested decomposition indicator and, if samples were preprocessed differently in the training data, cause larger prediction errors.
+- Exploratory results using decomposition indicator values predicted from MIRS, where many samples are not within the prediction domain, require indepdendent replication to avoid that relations between the suggested decomposition indicator and the other decomposition indicator values are an artefact caused by the same spectral features instead of the relation between the degree of decomposition and the respective peat property.-->
+
+
+# Conclusions
+
+We developed and evaluated a novel decomposition indicator, the degree of decomposition measured in litterbag experiments predicted from MIRS ($\gamma_\text{MIRS}$). To our knowledge, besides $\gamma_\text{ARM}$, $\gamma_\text{MIRS}$ is the only decomposition indicator that measures the degree of decomposition on an absolute scale. In contrast to $\gamma_\text{ARM}$, no assumptions on initial states have to be made and the degree of decomposition of undecomposed litter can be predicted accurately for many diverse litter types, which reduces errors when estimating the degree of decomposition with $\gamma_\text{MIRS}$ compared to $\gamma_\text{ARM}$. Compared to other commonly used qualitative decomposition indicators (C/N, H/C, O/C, $\delta^{13}$C, $\delta^{15}$N, HI$_{1630/1090}$, $\Delta$G$_\text{f}^0$, and NOSC), $\gamma_\text{MIRS}$ is biased much less by differences in the chemistry of undecomposed litter. Compared to MIRS-humification indices, it is biased less by minerals. This makes $\gamma_\text{MIRS}$ particularly useful for the interpretation of peat cores, reconstruction of past NPP, and improvement of peatland models. Further research is useful to improve our models to predict $\gamma_\text{MIRS}$. In particular, it is useful to include more diverse litter types in the training and test data, and to better test the influence of minerals and differences in protein contents on $\gamma_\text{MIRS}$.  
+We identified a limitation of most existing decomposition indicators, and all decomposition indicators analyzed here except $\gamma_\text{ARM}$: the decomposition indicators measure a signal that changes non-linearly when novel components are added to a sample because more decomposed samples contribute less to the signal than less decomposed samples, relative to their initial mass. For samples consisting of multiple components (e.g., litter types), the degree of decomposition will therefore be underestimated by bulk measurements. Our analysis suggests that even if the decomposition indicator can predict the degree of decomposition of each component perfectly, this bias can exceed 50% for samples with multiple components. In combination with our result that most existing decomposition indicators confound differences in initial litter chemistry with decomposition, this makes it unlikely that individual chemical or physical peat properties can be used to accurately estimate the degree of decomposition of peat samples. We argue that this bias has not been noticed in previous studies because there have been few efforts to measurements of the degree of decomposition from litterbag experiments.  
+Since $\gamma_\text{MIRS}$ estimates the degree of decomposition for individual litter types, it may be possible to avoid this bias with a component-specific analysis, where $\gamma_\text{MIRS}$ is estimated for each litter type in a peat sample. We discuss that this offers opportunities to analyze decomposition processes over longer time periods than is currently possible with litterbag experiments because decomposition can be traced throughout peat cores. We illustrated that this strategy may be useful to estimate litter type-specific decomposition rates and the slow-down of decomposition rates over time. Since peatland models can simulate how $\gamma_\text{MIRS}$ is biased in multi-component peat samples, bulk $\gamma_\text{MIRS}$ estimates are suitable to improve peatland models. Even more, our analyses suggest that under some conditions underestimation of the degree of decomposition of peat samples or dominant components by bulk $\gamma_\text{MIRS}$ estimates is small. We used this to estimate the degree of decomposition of several *Sphagnum*-dominated peat samples and reconstruct their NPP, which was previously only possible with process models.  
+That $\gamma_\text{MIRS}$ is testable against litterbag experiments and therefore can be used to identify and analyze existing error sources is an improvement over existing decomposition indicators because it allows to continuously improve models to estimate $\gamma_\text{MIRS}$. We expect that the suggested decomposition indicator is a suitable replacement for currently used decomposition indicators and that it is useful to reconstruct past NPP and improve peatland models, especially when combined with a component-specific analysis of peat samples. 
+
+
+
+
+
+
+
+
+<!--The suggested decomposition indicator --- the degree of decomposition predicted from mid infrared spectra, $\gamma_\text{MIRS}$ --- has several advantages over existing decomposition indicators: It is a direct estimate for the degree of decomposition of litter types, only requires transmission mid infrared measurements, and is independently testable against litterbag experiments. We illustrated that other decomposition indicators (C/N, humification indices, $\delta^{13}$C, $\delta^{15}$N, O/C, H/C, NOSC, and $\Delta$G$_\text{f}^0$) confound differences in the chemistry of undecomposed litter between species with decomposition mass losses and we hypothesize that many of them can vary for undecomposed litter as much as they vary due to decomposition. In contrast, $\gamma_\text{MIRS}$ is much less confounded by differences in the chemistry of undecomposed litter because the prediction model was trained on a diverse set of litter samples. Moreover, unlike humification indices, it does not confound large mineral contents with a small degree of decomposition or differences in N contents or differences in aromatic contents of undecomposed litter as decomposition mass losses. A main limitation of our implementation of the decomposition indicator is that we do not use a systematic sample collection, but use litterbag samples with *Sphagnum capillifolium*, *Typha latifolia*, and *Phragmites australis* available from previous studies. Our training data therefore lack a more complete representation of decomposed litter from other species (in particular sedges, shrubs, and holow and lawn mosses), samples with high mineral contents, and more decomposed samples, and future studies can address these limitations. The model to estimate the suggested decomposition indicator is available from the irpeatmodels package [---todo:ref] and can be used with the irpeat package [@Teickner.2022d]. We expect that the suggested decomposition indicator, or an improved version of it, is a suitable replacement for currently used decomposition indicators and that it will be useful to reconstruct past NPP and distinguish between environmental conditions that lead to similar net peat accumulation but with different water table depths and matter fluxes in peatland models.-->
+
+
+# Acknowledgements {-}
+
+This study was funded by the Deutsche Forschungsgemeinschaft (DFG, German Research Foundation) grant no. KN 929/23-1 to Klaus-Holger Knorr and grant no. PE 1632/18-1 to Edzer Pebesma.
+
+
+# Author contributions statement {-}
+
+HT: Conceptualization, methodology, software, validation, formal analysis, investigation, visualization, writing - original draft. KHK: supervision, funding acquisition. JA: Planned and performed the litterbag experiment in @Arsenault.2024a. MG: Performed the macrofossil analysis in @Diaconu.2020, @Galka.2022a, and @Galka.2022. All authors: writing - review & editing.
+
+
+# Competing interests {-}
+
+The authors declare no competing interests.
+
+
+# References {-}
+
+---
+abstract: |
+  The degree of decomposition of peat ($\gamma$) is useful to understand peatland degradation, past peat accumulation patterns, to reconstruct past net primary production (NPP), and to improve peatland models. To date, only the ash residue method allows to estimate $\gamma$ on an absolute scale, but has large errors; other decomposition indicators measure only qualitative differences of $\gamma$, are confounded by differences in the chemistry between litter types or by differences in mineral contents. We suggest prediction of $\gamma$ measured in litterbag experiments from mid infrared spectra (MIRS) as novel decomposition indicator, $\gamma_\text{MIRS}$. Moreover, we identify and analyze a previously neglected error source of most decomposition indicators which can cause underestimation of $\gamma$ by more than 50% and elaborate strategies to avoid this error source to reconstruct past *Sphagnum* NPP from peat samples with $\gamma_\text{MIRS}$.     
+  An evaluation of existing decomposition indicators (C/N, H/C, O/C, $\delta^{13}$C, $\delta^{15}$N, humification indices, Gibbs free energy of formation, and nominal oxidation state of C) indicates that these decomposition indicators are confounded by differences in the chemistry of undecomposed litter. Evaluation of prediction models for $\gamma_\text{MIRS}$ indicates that it can predict $\gamma$ for several litter types with small prediction errors (ca. 10%) and is biased much less by differences in initial litter chemistry. Tests with peat cores indicate that $\gamma_\text{MIRS}$ can identify peat layers degraded by drainage and less decomposed peat layers with fast *Sphagnum* growth. Simulations are used to develop strategies how $\gamma_\text{MIRS}$ can be used to improve process models, reconstruct past NPP despite the identified bias, and use peat cores to estimate decomposition model parameters. NPP of *Sphagnum* species during the Holocene reconstructed from peat cores agree with NPP ranges given in the literature. These properties and applications make $\gamma_\text{MIRS}$ useful for the interpretation of peat cores, reconstruction of past NPP, and improvement of peatland models. That $\gamma_\text{MIRS}$ is testable against litterbag experiments and therefore can be used to identify and analyze existing error sources is an improvement over existing decomposition indicators; this allows to continuously improve the models to estimate $\gamma_\text{MIRS}$ with more diverse litter types and samples with varying mineral contents.  
+---
+
+<!--old abstract-->
+<!--Currently, no method exists to directly measure the degree of decomposition of peat, but such measurements are useful to assess how degraded a peatland is, to reconstruct past net primary production, and to improve reconstruction of past environmental conditions and mass fluxes with peatland models. --><!--We suggest a decomposition indicator that directly estimates the degree of decomposition from mid infrared spectra, using prediction models that were computed with litterbag data where the degree of decomposition can be directly measured. By design, the suggested decomposition indicator is linearly related to the degree of decomposition, tested and testable against litterbag data, confounds, compared to commonly used decomposition indicators (C/N, H/C, O/C, $\delta^{13}$C, $\delta^{15}$N, humification indices, $\Delta$G$_\text{f}^0$, and NOSC), differences in initial litter chemistry with decomposition less, does not misinterpret the degree of decomposition for samples with large mineral contents or for samples with differences in protein contents (unlike humification indices), and is relatively easy to measure. Despite these advantages, predictions of our models probably have comparatively large errors for litter types not included in the training data, more decomposed samples, and samples with larger mineral contents, because we used a heterogeneous and comparatively small dataset, and the models extrapolate for many peat samples. The average degree of decomposition may be used to reconstruct past NPP from peat layer masses, but we show that simply dividing remaining masses by one minus the degree of decomposition underestimates initial layer masses when the sample consists of components with different degree of decomposition. Such biases may be avoided by process models or component-specific estimates for the degree of decomposition. Under some conditions, the simple approach has small bias, and we use it to reconstruct average NPP for several *Sphagnum* species at three sites during some periods of the Holocene. We expect that the suggested decomposition indicator, or an improved version of it, is a suitable replacement for currently used decomposition indicators.--><!-- and that it will be useful to reconstruct past NPP and distinguish between environmental conditions that lead to similar net peat accumulation but with different water table depths and process rates in peatland models.-->

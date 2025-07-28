@@ -1,0 +1,17 @@
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+_targets
+data/derived_data/Bacon_runs/*
+*.aux
+*.log
+*.bbl
+*.blg
+*.toc
+*.tar.gz
+output_for_irpeatmodels
+private
+renv
+res_varsel_dd_stan_2_fit_1.rds
+targets_rvars
