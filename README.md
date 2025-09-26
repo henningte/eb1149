@@ -33,7 +33,7 @@ information.
 **Text and figures :**
 [CC-BY-4.0](http://creativecommons.org/licenses/by/4.0/)
 
-**Code :** See the [DESCRIPTION](DESCRIPTION) file
+**Code :** [GPL-3](https://www.gnu.org/licenses/gpl-3.0.en.html)
 
 **Data :** [CC-0](http://creativecommons.org/publicdomain/zero/1.0/)
 attribution requested in reuse. See the sources section for licenses for
