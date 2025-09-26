@@ -86,25 +86,25 @@ list(
     dd_data_model_irpeat,
     dd_make_data_pmird_add_irpeat(x = dd_data_model)
   ),
-  tar_target(
-    dd_data_age_depth_model,
-    command = 
-      dd_make_data_age_depth_model()
-  ),
+  # tar_target(
+  #   dd_data_age_depth_model,
+  #   command = 
+  #     dd_make_data_age_depth_model()
+  # ),
   tar_target(
     dd_data_ta_wtd,
     command = 
       dd_make_data_ta_wtd()
   ),
-  tar_target(
-    dd_mir_co2_h20_background_file,
-    command = "data/derived_data/bg_spectrum_pure.rds",
-    format = "file"
-  ),
-  tar_target(
-    dd_mir_co2_h20_background,
-    command = readRDS("data/derived_data/bg_spectrum_pure.rds")
-  ),
+  # tar_target(
+  #  dd_mir_co2_h20_background_file,
+  #  command = "data/derived_data/bg_spectrum_pure.rds",
+  #  format = "file"
+  #),
+  #tar_target(
+  #  dd_mir_co2_h20_background,
+  #  command = readRDS("data/derived_data/bg_spectrum_pure.rds")
+  #),
   tar_target(
     dd_data_bona2018_moss_npp,
     command = dd_make_data_bona2018_moss_npp()
@@ -129,6 +129,20 @@ list(
   tar_target(
     dd_simulation_4,
     command = dd_make_simulation_4()
+  ),
+  tar_target(
+    dd_simulation_5,
+    command = 
+      dd_make_simulation_5(
+        dd_data_model = dd_data_model
+      )
+  ),
+  tar_target(
+    dd_simulation_6,
+    command = 
+      dd_make_simulation_6(
+        dd_data_model = dd_data_model
+      )
   ),
   #### age-depth models (recomputed) ####
   tar_target(
@@ -363,6 +377,83 @@ list(
         dd_data_model = dd_data_model,
         dd_model_info = dd_model_info
       )
+  ),
+  #### mixtures ####
+  tar_target(
+    dd_model_gamma_mirs_from_gamma_1,
+    pattern = map(dd_id_model),
+    command = 
+      dd_make_model_gamma_mirs_from_gamma(
+        dd_data_model = dd_data_model, 
+        id_model = dd_id_model
+      ) |>
+      list(),
+    resources =
+      tar_resources(
+        crew = tar_resources_crew(controller = "crew_parallel_1")
+      )
+  ), 
+  tar_target(
+    dd_mm2_file,
+    command = "mixing_model/stan_2.stan",
+    format = "file"
+  ),
+  tar_target(
+    dd_mm2_cmd,
+    command =
+      cmdstanr::cmdstan_model(
+        dd_mm2_file,
+        cpp_options = list(stan_threads = TRUE, "CXXFLAGS+= -O3 -march=native -mtune=native"),
+        # stanc_options = list("O1"),
+        force_recompile = TRUE
+      )
+  ),
+  tar_target(
+    dd_data_preparation_for_mixing_model_1,
+    command =
+      dd_make_data_preparation_for_mixing_model_1(
+        dd_data_pmird_peat_cores_macrofossils = dd_data_pmird_peat_cores_macrofossils, 
+        dd_data_pmird_peat_cores_irpeat = dd_data_pmird_peat_cores_irpeat
+      )
+  ),
+  tar_target(
+    dd_stan_data_mixing_model_1,
+    pattern = map(dd_id_model),
+    command = 
+      dd_make_stan_data_mixing_model_1(
+        dd_data_preparation_for_mixing_model_1 = dd_data_preparation_for_mixing_model_1,
+        id_model = dd_id_model
+      ) |>
+      list(),
+    resources =
+      tar_resources(
+        crew = tar_resources_crew(controller = "crew_parallel_1")
+      )
+  ),
+  tar_target(
+    dd_fit_stan_mixing_model_1,
+    pattern = map(dd_id_model),
+    command = 
+      dd_make_fit_stan_mixing_model_1(
+        dd_mm2_cmd = dd_mm2_cmd, 
+        dd_stan_data_mixing_model_1 = dd_stan_data_mixing_model_1[[dd_id_model]], 
+        file = paste0("mixing_model/stan_2_fit_", dd_id_model, ".rds")
+      ),
+    resources =
+      tar_resources(
+        crew = tar_resources_crew(controller = "crew_parallel_1")
+      ),
+    format = "file"
+  ),
+  tar_target(
+    dd_res_reconstructions_1,
+    command = 
+      dd_make_res_reconstructions_1(
+        dd_data_preparation_for_mixing_model_1 = dd_data_preparation_for_mixing_model_1, 
+        dd_fit_stan_mixing_model_1 = purrr::map(dd_fit_stan_mixing_model_1, readRDS), 
+        file = "mixing_model/dd_res_reconstructions.rds"
+      ),
+    format = "file"
   ),
   #### plots ####
   tar_target(
@@ -717,20 +808,20 @@ list(
         file_plot = "figures/dd_plot_19_1.pdf"
       )
   ),
-  tar_target(
-    dd_plot_20,
-    command =
-      dd_make_plot_20(
-        dd_reconstruction_initial_mass_rate_1 = readRDS_rvars(dd_reconstruction_initial_mass_rate_1), 
-        file_plot = "figures/dd_plot_20.pdf"
-      ),
-    format = "file"
-  ),
+  # tar_target(
+  #   dd_plot_20,
+  #   command =
+  #     dd_make_plot_20(
+  #       dd_reconstruction_initial_mass_rate_1 = readRDS_rvars(dd_reconstruction_initial_mass_rate_1), 
+  #       file_plot = "figures/dd_plot_20.pdf"
+  #     ),
+  #   format = "file"
+  # ),
   tar_target(
     dd_plot_21,
     command = 
       dd_make_plot_21(
-        dd_reconstruction_initial_mass_rate_1 = readRDS_rvars(dd_reconstruction_initial_mass_rate_1)
+        dd_rbacon_csv = dd_rbacon_csv
       )
   ),
   tar_target(
@@ -742,39 +833,39 @@ list(
       ),
     format = "file"
   ),
-  tar_target(
-    dd_plot_23_1,
-    command = 
-      dd_make_plot_23(
-        dd_simulation_3 = dd_simulation_3, 
-        dd_simulation_3_species = dd_simulation_3_species,
-        variable_degree_of_decomposition = sym("degree_of_decomposition_1"), 
-        file_plot = "figures/dd_plot_23_1.pdf"
-      ),
-    format = "file"
-  ),
-  tar_target(
-    dd_plot_23_2,
-    command = 
-      dd_make_plot_23(
-        dd_simulation_3 = dd_simulation_3, 
-        dd_simulation_3_species = dd_simulation_3_species,
-        variable_degree_of_decomposition = sym("degree_of_decomposition_2"), 
-        file_plot = "figures/dd_plot_23_2.pdf"
-      ),
-    format = "file"
-  ),
-  tar_target(
-    dd_plot_23_3,
-    command = 
-      dd_make_plot_23(
-        dd_simulation_3 = dd_simulation_3, 
-        dd_simulation_3_species = dd_simulation_3_species,
-        variable_degree_of_decomposition = sym("degree_of_decomposition_3"), 
-        file_plot = "figures/dd_plot_23_3.pdf"
-      ),
-    format = "file"
-  ),
+  # tar_target(
+  #   dd_plot_23_1,
+  #   command = 
+  #     dd_make_plot_23(
+  #       dd_simulation_3 = dd_simulation_3, 
+  #       dd_simulation_3_species = dd_simulation_3_species,
+  #       variable_degree_of_decomposition = sym("degree_of_decomposition_1"), 
+  #       file_plot = "figures/dd_plot_23_1.pdf"
+  #     ),
+  #   format = "file"
+  # ),
+  # tar_target(
+  #   dd_plot_23_2,
+  #   command = 
+  #     dd_make_plot_23(
+  #       dd_simulation_3 = dd_simulation_3, 
+  #       dd_simulation_3_species = dd_simulation_3_species,
+  #       variable_degree_of_decomposition = sym("degree_of_decomposition_2"), 
+  #       file_plot = "figures/dd_plot_23_2.pdf"
+  #     ),
+  #   format = "file"
+  # ),
+  # tar_target(
+  #   dd_plot_23_3,
+  #   command = 
+  #     dd_make_plot_23(
+  #       dd_simulation_3 = dd_simulation_3, 
+  #       dd_simulation_3_species = dd_simulation_3_species,
+  #       variable_degree_of_decomposition = sym("degree_of_decomposition_3"), 
+  #       file_plot = "figures/dd_plot_23_3.pdf"
+  #     ),
+  #   format = "file"
+  # ),
   tar_target(
     dd_plot_24,
     command = 
@@ -802,30 +893,68 @@ list(
       ),
     format = "file"
   ),
+  tar_target(
+    dd_plot_27,
+    command = 
+      dd_make_plot_27(
+        dd_simulation_3 = dd_simulation_3, 
+        dd_model_gamma_mirs_from_gamma_1 = dd_model_gamma_mirs_from_gamma_1[[1]],
+        file_plot = "figures/dd_plot_27.pdf"
+      ),
+    format = "file"
+  ),
+  tar_target(
+    dd_plot_28,
+    command = 
+      dd_make_plot_28(
+        dd_res_reconstructions_1 = readRDS_rvars(dd_res_reconstructions_1),
+        dd_data_ta_wtd = dd_data_ta_wtd,
+        file_plot = "figures/dd_plot_28.pdf"
+      ),
+    format = "file"
+  ),
+  tar_target(
+    dd_plot_29,
+    command =
+      irp_make_plot_29(
+        dd_res_reconstructions_1 = readRDS_rvars(dd_res_reconstructions_1), 
+        file_plot = "figures/dd_plot_29.pdf"
+      ),
+    format = "file"
+  ),
+  tar_target(
+    dd_plot_30,
+    command =
+      irp_make_plot_30(
+        dd_res_reconstructions_1 = readRDS_rvars(dd_res_reconstructions_1), 
+        file_plot = "figures/dd_plot_30.pdf"
+      ),
+    format = "file"
+  ),
   #### reconstruction of NPP ####
   tar_target(
     dd_simulation_1,
     command =
       dd_make_simulation_1()
   ),
-  tar_target(
-    dd_reconstruction_initial_mass_rate_1,
-    command =
-      dd_make_reconstruction_initial_mass_rate_1(
-        dd_data_pmird_peat_cores_yhat = purrr::map(dd_data_pmird_peat_cores_yhat, readRDS_rvars), 
-        dd_data_pmird_peat_cores_irpeat = dd_data_pmird_peat_cores_irpeat, 
-        dd_data_pmird_peat_cores_macrofossils = dd_data_pmird_peat_cores_macrofossils, 
-        dd_rbacon = dd_rbacon,
-        res_file = "targets_rvars/dd_reconstruction_initial_mass_rate_1.rds"
-      ),
-    format = "file"
-  ),
+  # tar_target(
+  #   dd_reconstruction_initial_mass_rate_1,
+  #   command =
+  #     dd_make_reconstruction_initial_mass_rate_1(
+  #       dd_data_pmird_peat_cores_yhat = purrr::map(dd_data_pmird_peat_cores_yhat, readRDS_rvars), 
+  #       dd_data_pmird_peat_cores_irpeat = dd_data_pmird_peat_cores_irpeat, 
+  #       dd_data_pmird_peat_cores_macrofossils = dd_data_pmird_peat_cores_macrofossils, 
+  #       dd_rbacon = dd_rbacon,
+  #       res_file = "targets_rvars/dd_reconstruction_initial_mass_rate_1.rds"
+  #     ),
+  #   format = "file"
+  # ),
   tar_target(
     dd_data_bona2018_moss_npp_summary_1,
     command = 
       dd_make_data_bona2018_moss_npp_summary_1(
-        dd_data_bona2018_moss_npp = dd_data_bona2018_moss_npp, 
-        dd_reconstruction_initial_mass_rate_1 = readRDS_rvars(dd_reconstruction_initial_mass_rate_1)
+        dd_data_bona2018_moss_npp = dd_data_bona2018_moss_npp#, 
+        #dd_reconstruction_initial_mass_rate_1 = readRDS_rvars(dd_reconstruction_initial_mass_rate_1)
       )
   ),
   tar_target(
@@ -855,81 +984,81 @@ list(
   tar_render(
     dd_paper,
     path = "dd-paper.Rmd"
-  ),
-  tar_render(
-    dd_bias,
-    path = "dd-bias.Rmd"
-  ),
-  #### for projpred ####
-  tar_target(
-    dd_model_info_2,
-    dd_get_model_info_2(
-      dd_data_model_preprocessed = dd_data_model_preprocessed, 
-      dd_mir_preprocessing_settings = dd_mir_preprocessing_settings
-    )
-  ),
-  tar_target(
-    dd_brms_compiled_model_2,
-    dd_make_brms_compiled_model_2(
-      dd_model_info_2[1, ],
-      backend = "cmdstanr",
-      sig_figs = 12L
-    )
-  ),
-  tar_target(
-    dd_stan_2_fit,
-    pattern = map(dd_id_model),
-    command = 
-      update(
-        dd_brms_compiled_model_2, 
-        newdata = 
-          dd_model_info_2 |> 
-          dplyr::filter(id_model == dd_id_model) |>
-          dd_make_brms_data_2(),
-        iter = dd_stan_1_mcmc_settings$iter,
-        warmup = dd_stan_1_mcmc_settings$warmup,
-        chains = dd_stan_1_mcmc_settings$chains,
-        cores = dd_stan_1_mcmc_settings$chains,
-        control = 
-          list(
-            max_treedepth = dd_stan_1_mcmc_settings$max_treedepth,
-            adapt_delta = dd_stan_1_mcmc_settings$adapt_delta
-          ),
-        save_pars = brms::save_pars(all = TRUE),
-        backend = "cmdstanr",
-        save_warmup = TRUE,
-        sig_figs = 14L
-      ) |>
-      list()
-  ),
-  tar_target(
-    dd_stan_2_kfold_2,
-    pattern = map(dd_id_model),
-    command = 
-      {
-        if(dd_id_model == 1) {
-          options(future.globals.maxSize = 1300 * 1024^2)
-          future::plan("multicore")
-          res <- 
-            brms::kfold(
-              x = dd_stan_2_fit[[dd_id_model]],
-              chains = 4L,
-              cores = 1L,
-              folds = dd_stan_1_kfold_cv_folds_2,
-              joint = "obs",
-              save_fits = TRUE,
-              recompile = FALSE
-            ) |>
-            list()
-          options(future.globals.maxSize = 500 * 1024^2)
-        } else {
-          res <- NULL
-        }
-        res
-      },
-    resources =
-      tar_resources(
-        crew = tar_resources_crew(controller = "crew_parallel_2")
-      )
-  )
+  )#,
+  # tar_render(
+  #   dd_bias,
+  #   path = "dd-bias.Rmd"
+  # ),
+  # #### for projpred ####
+  # tar_target(
+  #   dd_model_info_2,
+  #   dd_get_model_info_2(
+  #     dd_data_model_preprocessed = dd_data_model_preprocessed, 
+  #     dd_mir_preprocessing_settings = dd_mir_preprocessing_settings
+  #   )
+  # ),
+  # tar_target(
+  #   dd_brms_compiled_model_2,
+  #   dd_make_brms_compiled_model_2(
+  #     dd_model_info_2[1, ],
+  #     backend = "cmdstanr",
+  #     sig_figs = 12L
+  #   )
+  # ),
+  # tar_target(
+  #   dd_stan_2_fit,
+  #   pattern = map(dd_id_model),
+  #   command = 
+  #     update(
+  #       dd_brms_compiled_model_2, 
+  #       newdata = 
+  #         dd_model_info_2 |> 
+  #         dplyr::filter(id_model == dd_id_model) |>
+  #         dd_make_brms_data_2(),
+  #       iter = dd_stan_1_mcmc_settings$iter,
+  #       warmup = dd_stan_1_mcmc_settings$warmup,
+  #       chains = dd_stan_1_mcmc_settings$chains,
+  #       cores = dd_stan_1_mcmc_settings$chains,
+  #       control = 
+  #         list(
+  #           max_treedepth = dd_stan_1_mcmc_settings$max_treedepth,
+  #           adapt_delta = dd_stan_1_mcmc_settings$adapt_delta
+  #         ),
+  #       save_pars = brms::save_pars(all = TRUE),
+  #       backend = "cmdstanr",
+  #       save_warmup = TRUE,
+  #       sig_figs = 14L
+  #     ) |>
+  #     list()
+  # ),
+  # tar_target(
+  #   dd_stan_2_kfold_2,
+  #   pattern = map(dd_id_model),
+  #   command = 
+  #     {
+  #       if(dd_id_model == 1) {
+  #         options(future.globals.maxSize = 1300 * 1024^2)
+  #         future::plan("multicore")
+  #         res <- 
+  #           brms::kfold(
+  #             x = dd_stan_2_fit[[dd_id_model]],
+  #             chains = 4L,
+  #             cores = 1L,
+  #             folds = dd_stan_1_kfold_cv_folds_2,
+  #             joint = "obs",
+  #             save_fits = TRUE,
+  #             recompile = FALSE
+  #           ) |>
+  #           list()
+  #         options(future.globals.maxSize = 500 * 1024^2)
+  #       } else {
+  #         res <- NULL
+  #       }
+  #       res
+  #     },
+  #   resources =
+  #     tar_resources(
+  #       crew = tar_resources_crew(controller = "crew_parallel_2")
+  #     )
+  # )
 )

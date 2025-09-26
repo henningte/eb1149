@@ -87,7 +87,13 @@ dd_rmse_rvar <- function(yhat, y) {
   
 }
 
-
+#' Set units for rvar objects
+#' 
+#' @export
+irp_set_units_rvar <- function(x, ...) {
+  posterior::draws_of(x) <- units::set_units(posterior::draws_of(x), ...)
+  x
+}
 
 #### Helper functions for the paper ####
 

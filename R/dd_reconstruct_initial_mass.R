@@ -552,18 +552,20 @@ dd_make_reconstruction_initial_mass_rate_1 <- function(dd_data_pmird_peat_cores_
 
 
 
-#' Summarizes values in `dd_data_bona2018_moss_npp` for species groups in `dd_reconstruction_initial_mass_rate_1`
+#' Summarizes values in `dd_data_bona2018_moss_npp` for species groups
 #' 
 #' @export
-dd_make_data_bona2018_moss_npp_summary_1 <- function(dd_data_bona2018_moss_npp, dd_reconstruction_initial_mass_rate_1) {
+dd_make_data_bona2018_moss_npp_summary_1 <- function(dd_data_bona2018_moss_npp) {
   
-  target_taxa <- 
-    dd_reconstruction_initial_mass_rate_1 |>
-    dplyr::pull(taxon_rank_value) |>
-    unique() |>
-    stringr::str_split(pattern = "/") |>
-    unlist() |>
-    unique()
+  # target_taxa <- 
+  #   dd_reconstruction_initial_mass_rate_1 |>
+  #   dplyr::pull(taxon_rank_value) |>
+  #   unique() |>
+  #   stringr::str_split(pattern = "/") |>
+  #   unlist() |>
+  #   unique()
+  
+  target_taxa <- c("Sphagnum fuscum", "Sphagnum medium", "Sphagnum divinum", "Sphagnum rubellum", "Sphagnum cuspidatum")
   
   dd_data_bona2018_moss_npp |>
     dplyr::filter(stringr::str_detect(moss_species_or_layer, paste0("(", paste(target_taxa, collapse = "|"), ")"))) |>

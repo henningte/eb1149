@@ -449,30 +449,12 @@ dd_make_data_pmird_peat_cores_accumulation <- function() {
 }
 
 
-#' Age-depth models for cores
-#' 
-#' @export
-dd_make_data_age_depth_model <- function() {
- 
-  files <- c("data/raw_data/d88_1.rds", "data/raw_data/d89_1.rds")
-  
-  purrr::map(files, function(.x) {
-    res <- readRDS(.x)
-    tibble::tibble(
-      core_label = res$core_label[[1]],
-      model = list(approxfun(x = res$sample_depth_mid, y = res$age_bp, method = "linear", yleft = NA_real_, yright = NA_real_))
-    )
-  }) |>
-    dplyr::bind_rows()
-
-}
-
 #' TA-WTD models for cores
 #' 
 #' @export
 dd_make_data_ta_wtd <- function() {
   
-  files <- c("data/raw_data/d88_2.rds", "data/raw_data/d89_2.rds")
+  files <- c("data/raw_data/d88_2.rds", "data/raw_data/d89_2.rds", "data/raw_data/d90_1.rds")
   
   purrr::map(files, function(.x) {
     res <- readRDS(.x)
@@ -614,26 +596,7 @@ dd_make_simulation_2 <- function() {
 #' @export
 dd_make_simulation_3 <- function(dd_data_model) {
   
-  dd_preprocess_for_bias_1 <- function(x) {
-    x |>
-      ir::ir_interpolate() |>
-      ir::ir_clip(range = data.frame(start = 600, end = 4000)) |>
-      ir::ir_bc(method = "rubberband", do_impute = TRUE) |>
-      ir::ir_normalise(method = "area")
-  } 
-  
-  dd_data_model <- 
-    dd_data_model |>
-    dd_preprocess_for_bias_1()
-  
-  # compare fitted values and predictions
-  dd_data_model_check_1 <- 
-    dd_data_model |>
-    irpeat::irp_degree_of_decomposition_1(do_summary = TRUE, summary_function_mean = mean, summary_function_sd = posterior::sd) |>
-    irpeat::irp_degree_of_decomposition_2(do_summary = TRUE, summary_function_mean = mean, summary_function_sd = posterior::sd) |>
-    irpeat::irp_degree_of_decomposition_3(do_summary = TRUE, summary_function_mean = mean, summary_function_sd = posterior::sd)
-  
-  # get all undecomposed samples
+  ## collect components for mixtures
   d1 <- 
     dd_data_model |>
     dplyr::filter(mass_relative_mass >= 1.0) |>
@@ -667,13 +630,11 @@ dd_make_simulation_3 <- function(dd_data_model) {
         )
     ) |>
     dplyr::mutate(
-      scale_factor = list(10^seq(log10(1/1000), log10(1000), length.out = 15)) #list(unique(c(0.0, 0.1, 0.5, 0.8, seq(0.0, 10.0, length.out = 5))))
+      scale_factor = list(10^seq(log10(1/1000), log10(1000), length.out = 15)), #list(unique(c(0.0, 0.1, 0.5, 0.8, seq(0.0, 10.0, length.out = 5))))
+      gamma = 1 - mass_relative_mass
     ) |>
-    tidyr::unnest("scale_factor") %>%
-    magrittr::multiply_by(e2 = .$scale_factor)
+    tidyr::unnest("scale_factor")
   
-  
-  # get five decomposed samples
   d2 <- 
     dd_data_model |>
     dplyr::filter(! paste0(id_dataset, "_", id_sample) %in% paste0(d1$id_dataset, "_", d1$id_sample)) |>
@@ -691,31 +652,29 @@ dd_make_simulation_3 <- function(dd_data_model) {
     }) |>
     dplyr::bind_rows() |>
     dplyr::mutate(
-      scale_factor_2 = 1
+      scale_factor = 1,
+      gamma = 1 - mass_relative_mass
     ) |>
     rep(nrow(d1))
   
-  d1 |>
-    dplyr::slice(rep(seq_len(nrow(d1)), each = nrow(d2)/nrow(d1))) %>%
-    magrittr::add(d2) |>
-    dplyr::mutate(
-      scale_factor_1 = scale_factor,
-      scale_factor_2 = d2$scale_factor_2,
-      gamma_1 = (1 - mass_relative_mass),    
-      gamma_2 = (1 - d2$mass_relative_mass),   
-      m_1 = scale_factor_1 + scale_factor_2,
-      scale_factor_1_0 = scale_factor_1/(1 - gamma_1),
-      scale_factor_2_0 = scale_factor_2/(1 - gamma_2),
-      m_0 = scale_factor_1_0 + scale_factor_2_0,
-      taxon_rank_value2 = d2$taxon_rank_value, 
-      taxon_organ2 = d2$taxon_organ,
-      id_measurement2 = d2$id_measurement,
-      gamma = (m_0 - m_1) / m_0,
-      bias_hat =  ((gamma_1 * scale_factor_1 + gamma_2 * scale_factor_2) * m_0 - m_1 * m_0 + m_1^2) / (m_1 * m_0) 
-    ) |>
+  # compute mixture
+  res <- 
+    dd_make_mixture(
+      list(
+        d1 |>
+          dplyr::slice(rep(seq_len(nrow(d1)), each = nrow(d2)/nrow(d1))), 
+        d2
+      )
+    )
+  
+  # predict
+  res$mixture <- 
+    res$mixture |>
     irpeat::irp_degree_of_decomposition_1(do_summary = TRUE, summary_function_mean = mean, summary_function_sd = posterior::sd) |>
     irpeat::irp_degree_of_decomposition_2(do_summary = TRUE, summary_function_mean = mean, summary_function_sd = posterior::sd) |>
     irpeat::irp_degree_of_decomposition_3(do_summary = TRUE, summary_function_mean = mean, summary_function_sd = posterior::sd)
+  
+  res
   
 }
 
@@ -769,5 +728,161 @@ dd_make_simulation_4 <- function() {
 }
 
 
+#' Mixes spectra of available litter and estimates the bias in the MIRS-predicted degree of decomposition
+#' 
+#' Similar to `dd_make_siulation_3`, but mixes more than two litter types
+#' 
+#' @export
+dd_make_simulation_5 <- function(dd_data_model) {
+  
+  ## collect components for mixtures
+  d1 <- 
+    dd_data_model |>
+    dplyr::filter(mass_relative_mass >= 1.0) |>
+    dplyr::filter(! duplicated(taxon_rank_value, fromLast = TRUE)) |>
+    dplyr::slice_sample(n = 15, replace = FALSE) |>
+    dplyr::mutate(
+      dplyr::across(
+        dplyr::where(is.integer), as.integer
+      )
+    ) |>
+    dplyr::bind_rows(
+      dd_data_model |>
+        dplyr::filter(taxon_rank_value %in% (dd_data_model |> dplyr::filter(mass_relative_mass < 1.0) |> dplyr::pull(taxon_rank_value) |> unique())) |>
+        dplyr::group_split(taxon_rank_value) |>
+        purrr::map(function(.x) {
+          .x |> 
+            dplyr::arrange(mass_relative_mass) |>
+            dplyr::slice(1:2) |>
+            dplyr::filter(! duplicated(mass_relative_mass)) |>
+            dplyr::mutate(
+              dplyr::across(
+                dplyr::where(is.integer), as.integer
+              )
+            )
+        }) |>
+        dplyr::bind_rows() |>
+        dplyr::mutate(
+          dplyr::across(
+            dplyr::where(is.integer), as.integer
+          )
+        )
+    ) |>
+    dplyr::mutate(
+      scale_factor = list(10^seq(log10(1/1000), log10(1000), length.out = 15)), #list(unique(c(0.0, 0.1, 0.5, 0.8, seq(0.0, 10.0, length.out = 5))))
+      gamma = 1 - mass_relative_mass
+    ) |>
+    tidyr::unnest("scale_factor")
+  
+  d2 <- 
+    dd_data_model |>
+    dplyr::filter(! paste0(id_dataset, "_", id_sample) %in% paste0(d1$id_dataset, "_", d1$id_sample)) |>
+    dplyr::filter(taxon_rank_value %in% (dd_data_model |> dplyr::filter(mass_relative_mass < 1.0) |> dplyr::pull(taxon_rank_value) |> unique())) |>
+    dplyr::group_split(taxon_rank_value) |>
+    purrr::map(function(.x) {
+      .x |> 
+        dplyr::arrange(mass_relative_mass) |>
+        dplyr::slice(c(1:2, nrow(.x))) |>
+        dplyr::mutate(
+          dplyr::across(
+            dplyr::where(is.integer), as.integer
+          )
+        )
+    }) |>
+    dplyr::bind_rows() |>
+    dplyr::mutate(
+      scale_factor = 1,
+      gamma = 1 - mass_relative_mass
+    ) |>
+    rep(nrow(d1))
+  
+  # get five decomposed samples
+  d3 <- 
+    dd_data_model |>
+    dplyr::filter(! paste0(id_dataset, "_", id_sample) %in% paste0(c(d1$id_dataset, d2$id_dataset), "_", c(d1$id_sample, d2$id_sample))) |>
+    dplyr::filter(taxon_rank_value %in% (dd_data_model |> dplyr::filter(mass_relative_mass < 1.0) |> dplyr::pull(taxon_rank_value) |> unique())) |>
+    dplyr::group_split(taxon_rank_value) |>
+    purrr::map(function(.x) {
+      .x |> 
+        dplyr::arrange(mass_relative_mass) |>
+        dplyr::slice(c(1:2, nrow(.x))) |>
+        dplyr::mutate(
+          dplyr::across(
+            dplyr::where(is.integer), as.integer
+          )
+        )
+    }) |>
+    dplyr::bind_rows() |>
+    dplyr::slice_sample(n = nrow(d1), replace = TRUE) |>
+    dplyr::mutate(
+      scale_factor = runif(n = length(id_dataset), 0.5, 20),
+      gamma = 1 - mass_relative_mass
+    )
+  
+  # compute mixture
+  res <- 
+    dd_make_mixture(
+      list(
+        d1 |>
+          dplyr::slice(rep(seq_len(nrow(d1)), each = nrow(d2)/nrow(d1))), 
+        d2, 
+        d3 |>
+          dplyr::slice(rep(seq_len(nrow(d1)), each = nrow(d2)/nrow(d1)))
+      )
+    )
+  
+  # predict
+  
+  res$mixture <- 
+    res$mixture |>
+    irp_degree_of_decomposition_1_logit(do_summary = TRUE, summary_function_mean = mean, summary_function_sd = posterior::sd) |>
+    irp_degree_of_decomposition_2_logit(do_summary = TRUE, summary_function_mean = mean, summary_function_sd = posterior::sd) |>
+    irp_degree_of_decomposition_3_logit(do_summary = TRUE, summary_function_mean = mean, summary_function_sd = posterior::sd)
+  
+  res
+  
+}
 
+
+#' Mixes spectra of undecomposed litter and estimates the degree of decomposition
+#' 
+#' @export
+dd_make_simulation_6 <- function(dd_data_model) {
+  
+  ## collect components for mixtures
+  d1 <- 
+    dd_data_model |>
+    dplyr::filter(mass_relative_mass >= 1.0) |>
+    dplyr::filter(! duplicated(paste0(taxon_rank_value, "_", taxon_organ), fromLast = TRUE)) |>
+    dplyr::mutate(
+      dplyr::across(
+        dplyr::where(is.integer), as.integer
+      )
+    ) |>
+    dplyr::mutate(
+      scale_factor = 1,
+      gamma = 1 - mass_relative_mass
+    )
+  
+  d2 <- rep(d1, each = nrow(d1)) 
+  d1 <- rep(d1, nrow(d1)) 
+  
+  # compute mixture
+  res <- 
+    dd_make_mixture(
+      list(
+       d1, d2
+      )
+    )
+  
+  # predict
+  res$mixture <- 
+    res$mixture |>
+    irpeat::irp_degree_of_decomposition_1(do_summary = TRUE, summary_function_mean = mean, summary_function_sd = posterior::sd) |>
+    irpeat::irp_degree_of_decomposition_2(do_summary = TRUE, summary_function_mean = mean, summary_function_sd = posterior::sd) |>
+    irpeat::irp_degree_of_decomposition_3(do_summary = TRUE, summary_function_mean = mean, summary_function_sd = posterior::sd)
+  
+  res
+  
+}
 

@@ -7,12 +7,12 @@ dd_make_plot_1 <- function(dd_model, dd_data_model, dd_data_pmird_mineral, confi
   d_selection <- 
     dd_data_model |>
     dplyr::filter(
-      (id_dataset == 17 & id_sample_original == 4727 & taxon_rank_value == "Larix laricina") |
-        (id_dataset == 14 & id_sample_original == 4211 & taxon_rank_value == "Sphagnum rubellum") |
+      (id_dataset == 17 & id_sample_original == 4675 & taxon_rank_value == "Larix laricina") |
+        (id_dataset == 14 & id_sample_original == 4159 & taxon_rank_value == "Sphagnum rubellum") |
         (id_dataset == 1 & id_sample_original == 207 & taxon_rank_value == "Sphagnum capillifolium") |
         (id_dataset == 1 & id_sample_original == 142 & taxon_rank_value == "Typha latifolia") |
-        (id_dataset == 24 & id_sample_original == 9246 & taxon_rank_value == "Phragmites australis" & taxon_organ == "rhizomes") |
-        (id_dataset == 24 & id_sample_original == 9228 & taxon_rank_value == "Phragmites australis" & taxon_organ == "leaves")
+        (id_dataset == 24 & id_sample_original == 9195 & taxon_rank_value == "Phragmites australis" & taxon_organ == "rhizomes") |
+        (id_dataset == 24 & id_sample_original == 9177 & taxon_rank_value == "Phragmites australis" & taxon_organ == "leaves")
     ) |>
     ir::ir_interpolate() |>
     ir::ir_clip(range = data.frame(start = 600, end = 4000)) |>
@@ -87,13 +87,15 @@ dd_make_plot_1 <- function(dd_model, dd_data_model, dd_data_pmird_mineral, confi
     facet_wrap(~ facet_label) +
     scale_y_continuous(labels = function(x) format(100 * x,digits = 2)) +
     labs(
-      y = "Degree of decomposition (%)",
+      y = "&gamma;<sub>MIRS</sub> (%)",
       x = "Relative contribution of minerals (-)"
     ) +
     theme_classic() +
     theme(
       strip.background.x = element_blank(),
       strip.text.x = ggtext::element_markdown(),
+      axis.title.x = ggtext::element_markdown(),
+      axis.title.y = ggtext::element_markdown(),
       legend.position = "bottom"
     )
   
@@ -337,12 +339,12 @@ dd_make_plot_5 <- function(dd_model, dd_data_model, dd_data_pmird_decomposed, dd
   d_selection <- 
     dd_data_model |>
     dplyr::filter(
-      (id_dataset == 17 & id_sample_original == 4727 & taxon_rank_value == "Larix laricina") |
-        (id_dataset == 14 & id_sample_original == 4211 & taxon_rank_value == "Sphagnum rubellum") |
+      (id_dataset == 17 & id_sample_original == 4675 & taxon_rank_value == "Larix laricina") |
+        (id_dataset == 14 & id_sample_original == 4159 & taxon_rank_value == "Sphagnum rubellum") |
         (id_dataset == 1 & id_sample_original == 207 & taxon_rank_value == "Sphagnum capillifolium") |
         (id_dataset == 1 & id_sample_original == 142 & taxon_rank_value == "Typha latifolia") |
-        (id_dataset == 24 & id_sample_original == 9246 & taxon_rank_value == "Phragmites australis" & taxon_organ == "rhizomes") |
-        (id_dataset == 24 & id_sample_original == 9228 & taxon_rank_value == "Phragmites australis" & taxon_organ == "leaves")
+        (id_dataset == 24 & id_sample_original == 9195 & taxon_rank_value == "Phragmites australis" & taxon_organ == "rhizomes") |
+        (id_dataset == 24 & id_sample_original == 9177 & taxon_rank_value == "Phragmites australis" & taxon_organ == "leaves")
     ) |>
     ir::ir_interpolate() |>
     ir::ir_clip(range = data.frame(start = 600, end = 4000)) |>
@@ -417,13 +419,15 @@ dd_make_plot_5 <- function(dd_model, dd_data_model, dd_data_pmird_decomposed, dd
     facet_wrap(~ facet_label) +
     scale_y_continuous(labels = function(x) format(100 * x,digits = 2)) +
     labs(
-      y = "Degree of decomposition (%)",
+      y = "&gamma;<sub>MIRS</sub> (%)",
       x = "Relative contribution of decomposed peat sample (-)"
     ) +
     theme_classic() +
     theme(
       strip.background.x = element_blank(),
       strip.text.x = ggtext::element_markdown(),
+      axis.title.x = ggtext::element_markdown(),
+      axis.title.y = ggtext::element_markdown(),
       legend.position = "bottom"
     )
   
@@ -873,7 +877,7 @@ dd_make_plot_8 <- function(dd_stan_1_fit, dd_data_model, file_plot) {
       color = guide_legend(title = "Species (organ)", nrow = 3L, byrow = TRUE, override.aes = list(size = 4), order = 1),
       shape = guide_legend(title = "Reliability", override.aes = list(size = 4, ncol = 1, order = 2))
     ) +
-    scale_color_manual(values = c("lightsalmon3", "lightsalmon1", "lightblue", "darkseagreen", "grey70")) +
+    scale_color_manual(values = c("lightsalmon3", "lightsalmon1", "lightblue", "darkseagreen", "grey30")) +
     scale_y_continuous(labels = function(x) x * 100) +
     labs(
       y = "Degree of decomposition residuals (%)",
@@ -891,7 +895,8 @@ dd_make_plot_8 <- function(dd_stan_1_fit, dd_data_model, file_plot) {
       legend.text = ggtext::element_markdown(size = 10),
       legend.position = "bottom",
       legend.box = "horizontal",
-      legend.direction = "vertical"
+      legend.direction = "vertical",
+      panel.spacing = unit(0.3, "in")
     )
   
   ggsave(
@@ -1800,7 +1805,7 @@ dd_make_plot_15 <- function(dd_data_model_evaluation_1, rmse_df, dd_model_info, 
     dplyr::bind_rows() |>
     dplyr::select(-rmse)
   
-  res_colors <- c("thistle3", "lightsalmon1", "lightsalmon2", "lightsalmon3", "lightblue", "darkseagreen", "grey")
+  res_colors <- c("thistle3", "lightsalmon1", "lightsalmon2", "lightsalmon3", "lightblue", "darkseagreen", "grey30")
   
   cv_type_levels <- c("Fitted values", "Stratified CV", "Grouped CV")
   
@@ -2216,12 +2221,9 @@ dd_make_plot_20 <- function(dd_reconstruction_initial_mass_rate_1, file_plot = "
 #' Dummy plot function for rbacon models
 #' 
 #' @export
-dd_make_plot_21 <- function(dd_reconstruction_initial_mass_rate_1) {
+dd_make_plot_21 <- function(dd_rbacon_csv) {
   
-  target_core_label <- 
-    dd_reconstruction_initial_mass_rate_1 |>
-    dplyr::pull(core_label) |>
-    unique()
+  target_core_label <- names(dd_rbacon_csv)
   
   list.files(paste0("data/derived_data/Bacon_runs/", target_core_label), pattern = "\\.pdf$", full.names = TRUE)
   
@@ -2476,6 +2478,895 @@ dd_make_plot_26 <- function(dd_simulation_4, file_plot = "figures/dd_plot_26.pdf
     file_plot,
     plot = res_plot,
     width = 9, height = 7.5, 
+    dpi = 300,
+    device = cairo_pdf
+  )
+  
+  file_plot
+  
+}
+
+
+#' Plot for simulation 3: Relation between the true and the predicted degree of decomposition for the different models
+#' 
+#' @export
+dd_make_plot_27 <- function(dd_simulation_3, dd_model_gamma_mirs_from_gamma_1, file_plot = "figures/dd_plot_27.pdf") {
+  
+  # predict gamma_mirs from model 1
+  dd_simulation_3$components$gamma <- dd_simulation_3$components$gamma + 0.001
+  gamma_mirs_hat <- 
+    dd_mixture_estimate_gamma_mirs_from_gamma(
+      x = dd_simulation_3, 
+      dd_model_gamma_mirs_from_gamma_1 = dd_model_gamma_mirs_from_gamma_1, 
+      b_Intercept = 
+        as.data.frame(irpeatmodels::model_degree_of_decomposition_1_brms) |> 
+        dplyr::pull(b_Intercept) |> 
+        mean()
+    )
+  
+  res <- 
+    dd_simulation_3$mixture |>
+    dplyr::mutate(
+      gamma_mirs_hat = gamma_mirs_hat,
+      intensity_mean = purrr::map_dbl(spectra, function(.x) mean(.x$y)),
+      intensity_sd = purrr::map_dbl(spectra, function(.x) sd(.x$y))
+      # gamma_mirs_component_residuals_sum = gamma_mirs_component_residuals_sum$res,
+      # sum_hi = !!gamma_mirs_component_residuals_sum$sum_hi
+    ) |>
+    dplyr::left_join(
+      dd_simulation_3$components |>
+        ir::ir_drop_spectra() |>
+        dplyr::select(id_mixture, id_component, scale_factor, gamma, taxon_rank_value) |>
+        dplyr::mutate(
+          taxon_rank_value = 
+            dplyr::case_when(
+              taxon_rank_value %in% c("Sphagnum capillifolium", "Phragmites australis", "Typha latifolia") ~ taxon_rank_value,
+              TRUE ~ "Others"
+            )
+        ) |>
+        tidyr::pivot_wider(
+          names_from = "id_component",
+          values_from = c("scale_factor", "gamma", "taxon_rank_value")
+        ),
+      by = "id_mixture"
+    )
+  
+  res <- 
+    res |>
+    dplyr::mutate(
+      taxon_rank_value_1 = 
+        dplyr::case_when(
+          taxon_rank_value_1 == "Others" ~ taxon_rank_value_1,
+          TRUE ~ paste0("*", stringr::str_replace(taxon_rank_value_1, pattern = ".+ ", replacement = paste0(stringr::str_sub(taxon_rank_value_1, 1, 1), ". ")), "*") 
+        ),
+      taxon_rank_value_2 = 
+        dplyr::case_when(
+          taxon_rank_value_2 == "Others" ~ taxon_rank_value_2,
+          TRUE ~ paste0("*", stringr::str_replace(taxon_rank_value_2, pattern = ".+ ", replacement = paste0(stringr::str_sub(taxon_rank_value_2, 1, 1), ". ")), "*") 
+        )
+    ) |>
+    tidyr::pivot_longer(
+      cols = dplyr::all_of(paste0("degree_of_decomposition_", 1:3)),
+      names_to = "variable",
+      values_to = "value"
+    ) |>
+    dplyr::mutate(
+      bias = gamma - as.numeric(value),
+      variable = stringr::str_extract(variable, pattern = "\\d{1}$")
+    )
+  
+  res_plot <- 
+    res |>
+    ggplot(aes(y = bias, x = scale_factor_1 / m_1)) +
+    geom_point(aes(color = taxon_rank_value_1, shape = variable)) +
+    scale_color_manual(values = c("lightsalmon3", "lightblue", "darkseagreen", "grey30")) +
+    geom_hline(yintercept = 0, color = "grey") +
+    geom_path(
+      data = 
+        res |>
+        dplyr::filter(! duplicated(paste0(gamma_2, "_", as.character(taxon_rank_value_2), "_", gamma_1, "_", as.character(taxon_rank_value_1), "_", scale_factor_1 / m_1))),
+      mapping = aes(y = gamma - gamma_mirs_hat, group = paste0(gamma_2, "_", as.character(taxon_rank_value_2), "_", gamma_1, "_", as.character(taxon_rank_value_1)))
+    ) +
+    facet_grid(round(gamma_1, 2) ~ round(gamma_2, 2) + as.character(taxon_rank_value_2)) +
+    labs(
+      y = "&gamma; - &gamma;<sub>MIRS</sub> (g g<sup>-1</sup>)",
+      x = "Mass fraction of the first component (g g<sup>-1</sup>)"
+    ) +
+    guides(
+      color = guide_legend(title = "Taxon of first component", override.aes = list(size = 3)),
+      shape = guide_legend(title = "Model", override.aes = list(size = 3))
+    ) +
+    scale_x_continuous(breaks = c(0, 0.5, 1)) +
+    theme_classic() +
+    theme(
+      strip.background.x = element_blank(),
+      strip.background.y = element_blank(),
+      strip.text.x = ggtext::element_markdown(size = 13),
+      strip.text.y = ggtext::element_markdown(size = 13),
+      axis.title.x = ggtext::element_markdown(size = 13),
+      axis.title.y = ggtext::element_markdown(size = 13),
+      legend.title = ggtext::element_markdown(size = 13),
+      legend.text = ggtext::element_markdown(size = 12),
+      legend.position = "bottom",
+      panel.spacing = unit(0.2, "in")
+    )
+  
+  ggsave(
+    file_plot,
+    plot = res_plot,
+    width = 12, height = 8, 
+    dpi = 300,
+    device = cairo_pdf
+  )
+  
+  file_plot
+  
+}
+
+
+
+#' Plot of reconstructed gamma and NPP for peat cores
+#' 
+#' @export
+dd_make_plot_28 <- function(dd_res_reconstructions_1, dd_data_ta_wtd, file_plot = "figures/dd_plot_28.pdf") {
+  
+  make_taxon_rank_value_pretty <- function(x) {
+    
+    x |>
+      dplyr::mutate(
+        taxon_rank_value =
+          dplyr::case_when(
+            taxon_rank_value == "Sphagnum sp." ~ "*Sphagnum* sp.", 
+            taxon_rank_name != "species" & ! is.na(taxon_rank_value) ~ taxon_rank_value,
+            (taxon_rank_name != "species" | is.na(taxon_rank_name)) & is.na(taxon_rank_value) ~ macrofossil_type,
+            TRUE ~ paste0("*", stringr::str_replace(taxon_rank_value, "/", replacement = "* / *"), "*")
+          )
+      )
+    
+  }
+  
+  dd_res_reconstructions_1$d_macrofossil_summary <- 
+    dd_res_reconstructions_1$d_macrofossil_summary |>
+    dplyr::left_join(
+      dd_res_reconstructions_1$d_macrofossil |>
+        dplyr::select(core_label, sampling_date) |>
+        dplyr::filter(! duplicated(core_label)),
+      by = "core_label"
+    )
+  
+  res_gamma <- 
+    dd_res_reconstructions_1$d_macrofossil |>
+    dplyr::left_join(
+      dd_res_reconstructions_1$d_peat |>
+        dplyr::select(id_sample, dplyr::starts_with("degree_of_decomposition_") & dplyr::ends_with("_in_pd")),
+      by = "id_sample"
+    ) |>
+    make_taxon_rank_value_pretty() |>
+    dplyr::mutate(
+      age_upper = lubridate::year(sampling_date) - age_upper
+    ) |>
+    dplyr::select(core_label, id_sample, sample_depth_upper, macrofossil_type, taxon_rank_value, macrofossil_taxon_organ, age_upper, w, dplyr::starts_with("component_gamma_"), dplyr::starts_with("degree_of_decomposition_")) |>
+    dplyr::mutate(
+      age_upper = mean(age_upper),
+      dplyr::across(
+        dplyr::starts_with("component_gamma_"),
+        function(.x) {
+          cur_pd <- 
+            dplyr::pick(dplyr::all_of(paste0("degree_of_decomposition_", dplyr::cur_column() |> stringr::str_extract(pattern = "\\d{1}$"), "_in_pd")))
+          purrr::map2(.x, cur_pd, function(.x2, .y2) {
+            tibble::tibble(
+              yrep_mean = median(.x2),
+              yrep_lower = posterior::quantile2(.x2, probs = 0.05),
+              yrep_upper = posterior::quantile2(.x2, probs = 0.95),
+              is_in_pd = ifelse(.y2[[1]], "yes", "no")
+            )
+          })
+        }
+      )
+    ) |>
+    dplyr::select(! dplyr::starts_with("degree_of_decomposition_")) |>
+    tidyr::pivot_longer(
+      cols = dplyr::starts_with("component_gamma_"),
+      names_to = "variable",
+      values_to = "value"
+    ) |>
+    tidyr::unnest(value) |>
+    dplyr::mutate(
+      id_model = 
+        variable |>
+        stringr::str_extract(pattern = "\\d{1}$") |>
+        as.factor(),
+      core_label = 
+        core_label |>
+        stringr::str_remove(pattern = "^eb\\d{4}_")
+    ) |>
+    dplyr::filter((core_label == "MH1" & sample_depth_upper <= 200) | core_label != "MH1")
+  
+  res_gamma_summary <- 
+    dd_res_reconstructions_1$d_macrofossil_summary |>
+    dplyr::mutate(
+      age_upper = lubridate::year(sampling_date) - age_upper,
+      wtd =
+        dplyr::case_when(
+          core_label == "eb1005_MH1" ~ dd_data_ta_wtd$model[dd_data_ta_wtd$core_label == "eb1005_MH1"][[1]](sample_depth_upper),
+          core_label == "eb1018_OD2" ~ dd_data_ta_wtd$model[dd_data_ta_wtd$core_label == "eb1018_OD2"][[1]](sample_depth_upper),
+          core_label == "eb1006_MK1" ~ dd_data_ta_wtd$model[dd_data_ta_wtd$core_label == "eb1006_MK1"][[1]](sample_depth_upper),
+          TRUE ~ NA_real_
+        ),
+      wtd = wtd - min(wtd, na.rm = TRUE) + 20,
+      wtd = wtd / max(wtd, na.rm = TRUE)
+    ) |>
+    dplyr::select(id_sample, core_label, sample_depth_upper, age_upper, dplyr::starts_with("gamma_"), wtd) |>
+    dplyr::mutate(
+      age_upper = mean(age_upper),
+      dplyr::across(
+        dplyr::starts_with("gamma_"),
+        function(.x) {
+          purrr::map(.x, function(.x2) {
+            tibble::tibble(
+              yrep_mean = median(.x2),
+              yrep_lower = posterior::quantile2(.x2, probs = 0.05),
+              yrep_lower50 = posterior::quantile2(.x2, probs = 0.25),
+              yrep_upper = posterior::quantile2(.x2, probs = 0.95),
+              yrep_upper50 = posterior::quantile2(.x2, probs = 0.75)
+            )
+          })
+        }
+      )
+    ) |>
+    tidyr::pivot_longer(
+      cols = dplyr::starts_with("gamma_"),
+      names_to = "variable",
+      values_to = "value"
+    ) |>
+    tidyr::unnest(value) |>
+    dplyr::mutate(
+      id_model = 
+        variable |>
+        stringr::str_extract(pattern = "\\d{1}$") |>
+        as.factor(),
+      core_label = 
+        core_label |>
+        stringr::str_remove(pattern = "^eb\\d{4}_")
+    ) |>
+    dplyr::filter((core_label == "MH1" & sample_depth_upper <= 200) | core_label != "MH1")
+  
+ 
+  
+  p1 <- 
+    res_gamma |>
+    dplyr::filter(w > 0.4) |>
+    #dplyr::filter(stringr::str_detect(taxon_rank_value, "(Sphagnum|Acutifolia)")) |>
+    dplyr::group_split(taxon_rank_value) |>
+    purrr::map(function(.x) {
+      if(nrow(.x) < 45) {
+        NULL
+      } else {
+        .x
+      }
+    }) |>
+    dplyr::bind_rows() |>
+    #dplyr::filter(stringr::str_detect(taxon_rank_value, "(fuscum|Eriophorum|rubellum|medium)")) |>
+    dplyr::arrange(core_label, age_upper) |>
+    ggplot(aes(y = yrep_mean, x = age_upper)) +
+    geom_path(data = res_gamma_summary |> dplyr::arrange(core_label, age_upper), mapping = aes(y = wtd), color = "blue") +
+    # geom_rect(
+    #   data = d_periods, 
+    #   aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax, fill = Period), 
+    #   color = NA, alpha = 0.3
+    # ) +
+    # geom_path(data = a1, mapping = aes(y = precipitation/temperature*3 - 0.3, x = age_upper)) +
+    # scale_fill_manual(values = c("steelblue", "darksalmon")) +
+    geom_ribbon(
+      data = 
+        res_gamma_summary |> 
+        dplyr::filter(! duplicated(paste0(id_model, "_", core_label, "_", age_upper))) |>
+        dplyr::arrange(id_model, core_label, age_upper), 
+      mapping = aes(ymin = yrep_lower, ymax = yrep_upper), 
+      fill = "grey", color = NA, alpha = 0.3
+    ) +
+    geom_ribbon(
+      data = 
+        res_gamma_summary |> 
+        dplyr::filter(! duplicated(paste0(id_model, "_", core_label, "_", age_upper))) |>
+        dplyr::arrange(id_model, core_label, age_upper), 
+      mapping = aes(ymin = yrep_lower50, ymax = yrep_upper50), 
+      fill = "grey", color = NA, alpha = 0.3
+    ) +
+    geom_path(
+      data = 
+        res_gamma_summary |> 
+        dplyr::filter(! duplicated(paste0(id_model, "_", core_label, "_", age_upper))) |>
+        dplyr::arrange(id_model, core_label, age_upper), 
+      color = "grey50"
+    ) +
+    geom_errorbar(aes(ymin = yrep_lower, ymax = yrep_upper, color = taxon_rank_value), width = 0, alpha = 0.3) +
+    geom_point(aes(color = taxon_rank_value), size = 0.5) +
+    coord_cartesian(ylim = c(0, 1)) +
+    scale_x_reverse(breaks = c(2000, 1500, 500, -500, -2000, -4000, -6000, -8000)) +
+    facet_grid(id_model ~ core_label, scales = "free", space = "free") +
+    labs(
+      x = "Age of upper boundary (yr CE)",
+      y = "&gamma; (g g<sup>-1</sup>)"
+    ) +
+    guides(
+      color = guide_legend(title = "Taxon", override.aes = list(size = 3, linewidth = 1), ncol = 3)
+    ) +
+    ggnewscale::new_scale_color() +
+    geom_rug(aes(color = is_in_pd), sides = "b") +
+    scale_color_manual(values = c("lightgrey", "grey20")) +
+    guides(
+      color = guide_legend(title = "Is in prediction domain", override.aes = list(size = 3, linewidth = 1), ncol = 3, direction = "vertical")
+    ) +
+    theme_classic() +
+    theme(
+      strip.background.x = element_blank(),
+      strip.background.y = element_blank(),
+      strip.text.x = ggtext::element_markdown(size = 13),
+      strip.text.y = ggtext::element_markdown(size = 13),
+      axis.title.x = ggtext::element_markdown(size = 13),
+      axis.title.y = ggtext::element_markdown(size = 13),
+      legend.title = ggtext::element_markdown(size = 13),
+      legend.text = ggtext::element_markdown(size = 11),
+      legend.position = "bottom",
+      panel.spacing = unit(0.2, "in")
+    )
+  
+  
+  res_npp <- 
+    dd_res_reconstructions_1$d_macrofossil |>
+    dplyr::left_join(
+      dd_res_reconstructions_1$d_peat |>
+        dplyr::select(id_sample, dplyr::starts_with("degree_of_decomposition_") & dplyr::ends_with("_in_pd")),
+      by = "id_sample"
+    ) |>
+    make_taxon_rank_value_pretty() |>
+    dplyr::select(core_label, id_sample, sample_depth_upper, sampling_date, macrofossil_type, taxon_rank_value, macrofossil_taxon_organ, age_upper, w, dplyr::starts_with("npp_"), dplyr::starts_with("degree_of_decomposition_")) |>
+    dplyr::mutate(
+      age_upper = lubridate::year(sampling_date) - mean(age_upper), 
+      wtd =
+        dplyr::case_when(
+          core_label == "eb1005_MH1" ~ dd_data_ta_wtd$model[dd_data_ta_wtd$core_label == "eb1005_MH1"][[1]](sample_depth_upper),
+          core_label == "eb1018_OD2" ~ dd_data_ta_wtd$model[dd_data_ta_wtd$core_label == "eb1018_OD2"][[1]](sample_depth_upper),
+          core_label == "eb1006_MK1" ~ dd_data_ta_wtd$model[dd_data_ta_wtd$core_label == "eb1006_MK1"][[1]](sample_depth_upper),
+          TRUE ~ NA_real_
+        ),
+      dplyr::across(
+        dplyr::starts_with("npp_"),
+        function(.x) {
+          cur_pd <- 
+            dplyr::pick(dplyr::all_of(paste0("degree_of_decomposition_", dplyr::cur_column() |> stringr::str_extract(pattern = "\\d{1}$"), "_in_pd")))
+          purrr::map2(.x, cur_pd, function(.x2, .y2) {
+            tibble::tibble(
+              yrep_mean = median(.x2),
+              yrep_lower = posterior::quantile2(.x2, probs = 0.05),
+              yrep_upper = posterior::quantile2(.x2, probs = 0.95),
+              is_in_pd = ifelse(.y2[[1]], "yes", "no")
+            )
+          })
+        }
+      )
+    ) |>
+    dplyr::select(! dplyr::starts_with("degree_of_decomposition_")) |>
+    tidyr::pivot_longer(
+      cols = dplyr::starts_with("npp_"),
+      names_to = "variable",
+      values_to = "value"
+    ) |>
+    tidyr::unnest(value) |>
+    dplyr::mutate(
+      id_model = 
+        variable |>
+        stringr::str_extract(pattern = "\\d{1}$") |>
+        as.factor(),
+      core_label = 
+        core_label |>
+        stringr::str_remove(pattern = "^eb\\d{4}_")
+    ) |>
+    dplyr::filter((core_label == "MH1" & sample_depth_upper <= 200) | core_label != "MH1")
+  
+  res_npp_summary <- 
+    dd_res_reconstructions_1$d_macrofossil_summary |>
+    dplyr::select(id_sample, core_label, sample_depth_upper, sampling_date, age_upper, dplyr::starts_with("npp_")) |>
+    dplyr::mutate(
+      age_upper = lubridate::year(sampling_date) - mean(age_upper), 
+      wtd =
+        dplyr::case_when(
+          core_label == "eb1005_MH1" ~ dd_data_ta_wtd$model[dd_data_ta_wtd$core_label == "eb1005_MH1"][[1]](sample_depth_upper),
+          core_label == "eb1018_OD2" ~ dd_data_ta_wtd$model[dd_data_ta_wtd$core_label == "eb1018_OD2"][[1]](sample_depth_upper),
+          core_label == "eb1006_MK1" ~ dd_data_ta_wtd$model[dd_data_ta_wtd$core_label == "eb1006_MK1"][[1]](sample_depth_upper),
+          TRUE ~ NA_real_
+        ),
+      wtd = wtd - min(wtd, na.rm = TRUE) + 20,
+      wtd = wtd / max(wtd, na.rm = TRUE),
+      dplyr::across(
+        dplyr::starts_with("npp_"),
+        function(.x) {
+          purrr::map(.x, function(.x2) {
+            tibble::tibble(
+              yrep_mean = median(.x2),
+              yrep_lower = posterior::quantile2(.x2, probs = 0.05),
+              yrep_lower50 = posterior::quantile2(.x2, probs = 0.25),
+              yrep_upper = posterior::quantile2(.x2, probs = 0.95),
+              yrep_upper50 = posterior::quantile2(.x2, probs = 0.75)
+            )
+          })
+        }
+      )
+    ) |>
+    tidyr::pivot_longer(
+      cols = dplyr::starts_with("npp_"),
+      names_to = "variable",
+      values_to = "value"
+    ) |>
+    tidyr::unnest(value) |>
+    dplyr::mutate(
+      id_model = 
+        variable |>
+        stringr::str_extract(pattern = "\\d{1}$") |>
+        as.factor(),
+      core_label = 
+        core_label |>
+        stringr::str_remove(pattern = "^eb\\d{4}_")
+    ) |>
+    dplyr::filter((core_label == "MH1" & sample_depth_upper <= 200) | core_label != "MH1")
+  
+  res_amar_summary <- 
+    dd_res_reconstructions_1$d_macrofossil_summary |>
+    dplyr::mutate(
+      m_1_1 = m_0_1 * (1 - gamma_1)/duration,
+      m_1_2 = m_0_1 * (1 - gamma_2)/duration,
+      m_1_3 = m_0_1 * (1 - gamma_3)/duration
+    ) |>
+    dplyr::select(id_sample, core_label, sampling_date, sample_depth_upper, age_upper, dplyr::starts_with("m_1_")) |>
+    dplyr::mutate(
+      age_upper = lubridate::year(sampling_date) - mean(age_upper),
+      dplyr::across(
+        dplyr::starts_with("m_1_"),
+        function(.x) {
+          purrr::map(.x, function(.x2) {
+            tibble::tibble(
+              yrep_mean = median(.x2),
+              yrep_lower = posterior::quantile2(.x2, probs = 0.05),
+              yrep_upper = posterior::quantile2(.x2, probs = 0.95)
+            )
+          })
+        }
+      )
+    ) |>
+    tidyr::pivot_longer(
+      cols = dplyr::starts_with("m_1_"),
+      names_to = "variable",
+      values_to = "value"
+    ) |>
+    tidyr::unnest(value) |>
+    dplyr::mutate(
+      id_model = 
+        variable |>
+        stringr::str_extract(pattern = "\\d{1}$") |>
+        as.factor(),
+      core_label = 
+        core_label |>
+        stringr::str_remove(pattern = "^eb\\d{4}_")
+    ) |>
+    dplyr::filter((core_label == "MH1" & sample_depth_upper <= 200) | core_label != "MH1")
+  
+  p2 <- 
+    res_npp |>
+    dplyr::filter(w > 0.4) |>
+    dplyr::group_split(taxon_rank_value) |>
+    purrr::map(function(.x) {
+      if(nrow(.x) < 45) {
+        NULL
+      } else {
+        .x
+      }
+    }) |>
+    dplyr::bind_rows() |>
+    #dplyr::filter(stringr::str_detect(taxon_rank_value, "(fuscum|Eriophorum|rubellum|medium)")) |>
+    dplyr::arrange(core_label, age_upper) |>
+    ggplot(aes(y = yrep_mean, x = age_upper)) +
+    geom_path(data = res_npp_summary |> dplyr::arrange(core_label, age_upper), mapping = aes(y = wtd), color = "blue") +
+    # geom_rect(
+    #   data = d_periods, 
+    #   aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax, fill = Period), 
+    #   color = NA, alpha = 0.3
+    # ) +
+    # scale_fill_manual(values = c("steelblue", "darksalmon")) +
+    geom_ribbon(
+      data = 
+        res_npp_summary |> 
+        dplyr::filter(! duplicated(paste0(id_model, "_", core_label, "_", age_upper))) |>
+        dplyr::arrange(id_model, core_label, age_upper), 
+      mapping = aes(ymin = yrep_lower, ymax = yrep_upper), 
+      fill = "grey", color = NA, alpha = 0.3
+    ) +
+    geom_ribbon(
+      data = 
+        res_npp_summary |> 
+        dplyr::filter(! duplicated(paste0(id_model, "_", core_label, "_", age_upper))) |>
+        dplyr::arrange(id_model, core_label, age_upper), 
+      mapping = aes(ymin = yrep_lower50, ymax = yrep_upper50), 
+      fill = "grey", color = NA, alpha = 0.3
+    ) +
+    geom_errorbar(aes(ymin = yrep_lower, ymax = yrep_upper, color = taxon_rank_value), width = 0, alpha = 0.3) +
+    geom_point(aes(color = taxon_rank_value), size = 0.5) +
+    geom_path(
+      data = 
+        res_npp_summary |> 
+        dplyr::filter(! duplicated(paste0(id_model, "_", core_label, "_", age_upper))) |>
+        dplyr::arrange(id_model, core_label, age_upper), 
+      color = "grey50"
+    ) +
+    geom_path(
+      data = 
+        res_amar_summary |> 
+        dplyr::filter(! duplicated(paste0(id_model, "_", core_label, "_", age_upper))) |>
+        dplyr::arrange(id_model, core_label, age_upper),
+      mapping = aes(group = core_label),
+      color = "brown"
+    ) +
+    coord_cartesian(ylim = c(0, 1)) +
+    scale_x_reverse(breaks = c(2000, 1500, 500, -500, -2000, -4000, -6000, -8000)) +
+    facet_grid(id_model ~ core_label, scales = "free", space = "free") +
+    labs(
+      x = "Age of upper boundary (yr CE)",
+      y = "NPP or AMAR (kg m<sup>-2</sup> yr<sup>-1</sup>)"
+    ) +
+    guides(
+      color = guide_legend(title = "Taxon", override.aes = list(size = 3, linewidth = 1), ncol = 3)
+    ) +
+    ggnewscale::new_scale_color() +
+    geom_rug(aes(color = is_in_pd), sides = "b") +
+    scale_color_manual(values = c("lightgrey", "grey20")) +
+    guides(
+      color = guide_legend(title = "Is in prediction domain", override.aes = list(size = 3, linewidth = 1), ncol = 3, direction = "vertical")
+    ) +
+    theme_classic() +
+    theme(
+      strip.background.x = element_blank(),
+      strip.background.y = element_blank(),
+      strip.text.x = ggtext::element_markdown(size = 13),
+      strip.text.y = ggtext::element_markdown(size = 13),
+      axis.title.x = ggtext::element_markdown(size = 13),
+      axis.title.y = ggtext::element_markdown(size = 13),
+      legend.title = ggtext::element_markdown(size = 13),
+      legend.text = ggtext::element_markdown(size = 11),
+      legend.position = "bottom",
+      panel.spacing = unit(0.2, "in")
+    )
+  
+  res_plot <- 
+    patchwork::wrap_plots(p1, p2, ncol = 1L) +
+    patchwork::plot_layout(
+      guides = "collect"
+    ) +
+    patchwork::plot_annotation(
+      tag_prefix = "(", tag_suffix = ")", tag_levels = "a"
+    ) &
+    theme(
+      legend.position = "bottom",
+      legend.direction = "vertical"
+    )
+  
+  ggsave(
+    file_plot,
+    plot = res_plot,
+    width = 12.2, height = 11, 
+    dpi = 300,
+    device = cairo_pdf
+  )
+  
+  file_plot
+  
+}
+
+
+#' Plot of saturated hydraulic conductivity versus gamma (together with suggested relations between both)
+#' 
+#' @export
+irp_make_plot_29 <- function(dd_res_reconstructions_1, file_plot = "figures/dd_plot_29.pdf") {
+  
+  irp_set_units_rvar <- function(x, ...) {
+    posterior::draws_of(x) <- units::set_units(posterior::draws_of(x), ...)
+    x
+  }
+  
+  ksat_morris2015a <- function(gamma, sample_depth_mid, hollow, center) {
+    
+    res <- 1.200 * (1 - gamma) - 6.147 * sample_depth_mid - 0.877 * hollow - 0.020 * center - 2.87
+    units::set_units(10^res, m/s)
+    
+  }
+  
+  ksat_morris2011b <- function(gamma) {
+    
+    res <- 0.001 * exp(8* (1 - gamma))
+    units::set_units(res, cm/s)
+    
+  }
+  
+  ksat_frolking2010 <- function(gamma) {
+    
+    rho_min <- 50
+    delta_rho <- 70
+    c3 <- 0.2
+    c4 <- 0.05
+    rho <- rho_min + delta_rho * (1 - 0.5 * (1 + pracma::erf(((1 - gamma) - c3) / (sqrt(2) * c4)))) #---note: from Treat.2022
+    res <- (150 - 3*rho)/70 #---note: from Treat.2022
+    units::set_units(10^res, cm/min) #---note: I am not sure about the unit, but by assuming this unit, I get values for the conductivity that match those shown in Fig. 6 of Morris.2015a
+    
+  }
+  
+  d_plot <- 
+    dd_res_reconstructions_1$d_macrofossil_summary |>
+    dplyr::mutate(
+      sample_depth_mid = (sample_depth_upper + sample_depth_lower) / 2,
+      saturated_hydraulic_conductivity_1 = 
+        saturated_hydraulic_conductivity_1 |>
+        irp_set_units_rvar(m/s),
+      saturated_hydraulic_conductivity_morris2015a_2 = 
+        ksat_morris2015a(
+          gamma = mean(gamma_2), 
+          sample_depth_mid = sample_depth_mid/100, 
+          hollow = 0, 
+          center = 1
+        ) |> 
+        units::set_units(m/s),
+      saturated_hydraulic_conductivity_morris2011b_2 =
+        ksat_morris2011b(gamma = mean(gamma_2)) |>
+        units::set_units(m/s),
+      saturated_hydraulic_conductivity_frolking2010_2 = 
+        ksat_frolking2010(gamma = mean(gamma_2)) |>
+        units::set_units(m/s)
+    ) |>
+    dplyr::left_join(
+      dd_res_reconstructions_1$d_macrofossil |>
+        dplyr::group_by(core_label, id_sample) |>
+        dplyr::summarise(
+          w = sum(w[stringr::str_detect(taxon_rank_value, "Sphagnum")]),
+          .groups = "drop"
+        ),
+      by = c("core_label", "id_sample")
+    )
+  
+  d_plot_grid <- 
+    tibble::tibble(
+      gamma = seq(0, 1, length.out = 100),
+      saturated_hydraulic_conductivity_frolking2010 = 
+        ksat_frolking2010(gamma = gamma) |> 
+        units::set_units(m/s),
+      saturated_hydraulic_conductivity_morris2011b = 
+        ksat_morris2011b(gamma = gamma) |> 
+        units::set_units(m/s),
+      saturated_hydraulic_conductivity_morris2015a_30cm =
+        ksat_morris2015a(gamma = gamma, sample_depth_mid = 0.3, hollow = 0, center = 1) |> 
+        units::set_units(m/s),
+      saturated_hydraulic_conductivity_morris2015a_50cm =
+        ksat_morris2015a(gamma = gamma, sample_depth_mid = 0.5, hollow = 0, center = 1) |> 
+        units::set_units(m/s)
+    ) |>
+    tidyr::pivot_longer(
+      cols = ! dplyr::all_of("gamma"),
+      names_to = "ksat_model",
+      values_to = "saturated_hydraulic_conductivity"
+    ) |>
+    dplyr::mutate(
+      core_label = list(c("MH1", "MK1", "OD2")),
+      saturated_hydraulic_conductivity =
+        log10(saturated_hydraulic_conductivity) |>
+        as.numeric(),
+      ksat_model =
+        dplyr::case_when(
+          stringr::str_detect(ksat_model, "frolking2010") ~ "Frolking et al. (2010)",
+          stringr::str_detect(ksat_model, "morris2011b") ~ "Morris et al. (2011)",
+          stringr::str_detect(ksat_model, "morris2015a_30cm") ~ "Morris et al. (2015) (30 cm depth)",
+          stringr::str_detect(ksat_model, "morris2015a_50cm") ~ "Morris et al. (2015) (50 cm depth)"
+        )
+    ) |>
+    tidyr::unnest(core_label)
+  
+  res_plot <- 
+    d_plot |>
+    dplyr::mutate(
+      dplyr::across(
+        dplyr::contains("saturated_hydraulic"),
+        log10
+      ),
+      core_label =
+        core_label |>
+        stringr::str_remove(pattern = "^eb\\d{4}_"),
+      dplyr::across(
+        dplyr::starts_with("gamma_"),
+        function(.x) {
+          purrr::map(.x, function(.x2) {
+            tibble::tibble(
+              gamma_mean = mean(.x2),
+              gamma_lower = posterior::quantile2(.x2, probs = 0.1),
+              gamma_upper = posterior::quantile2(.x2, probs = 0.9)
+            )
+          })
+        }
+      )
+    ) |>
+    tidyr::pivot_longer(
+      cols = dplyr::starts_with("gamma_"),
+      names_to = "model",
+      values_to = "value"
+    ) |>
+    dplyr::mutate(
+      model =
+        model |>
+        stringr::str_extract(pattern = "\\d+$"),
+      saturated_hydraulic_conductivity_1_in_pd =
+        ifelse(saturated_hydraulic_conductivity_1_in_pd, "yes", "no")
+    ) |>
+    tidyr::unnest(value) |>
+    ggplot(aes(x = gamma_mean)) +
+    geom_errorbar(
+      aes(
+        ymin = posterior::quantile2(saturated_hydraulic_conductivity_1, probs = 0.1),
+        ymax = posterior::quantile2(saturated_hydraulic_conductivity_1, probs = 0.9)
+      ),
+      width = 0, color = "grey"
+    ) +
+    geom_errorbarh(
+      aes(
+        y = median(saturated_hydraulic_conductivity_1),
+        xmin = gamma_lower,
+        xmax = gamma_upper
+      ),
+      height = 0, color = "grey"
+    ) +
+    geom_point(aes(y = median(saturated_hydraulic_conductivity_1), color = sample_depth_mid, shape = saturated_hydraulic_conductivity_1_in_pd)) +
+    guides(
+      color = guide_legend(direction = "vertical", title = "Depth (cm)", override.aes = list(size = 3), ncol = 3),
+      shape = guide_legend(direction = "vertical", title = "<i>K</i><sub>sat</sub> in prediction domain?", override.aes = list(size = 3))
+    ) +
+    ggnewscale::new_scale_color() +
+    geom_path(
+      data = d_plot_grid,
+      mapping = aes(y = as.numeric(saturated_hydraulic_conductivity), x = gamma, color = ksat_model),
+      linewidth = 0.9
+    ) +
+    scale_color_manual(values = c("grey50", "lightsteelblue", "lightsalmon", "lightsalmon4")) +
+    guides(color = guide_legend(direction = "vertical", title = "Model for hydraulic conductivity", override.aes = list(linewidth = 3))) +
+    facet_grid(model ~ core_label) +
+    labs(
+      y = "Saturated hydraulic conductivity (m s<sup>-1</sup>)",
+      x = "&gamma; (g g<sup>-1</sup>)"
+    ) +
+    scale_y_continuous(labels = function(x) paste0("10<sup>", x, "</sup>")) +
+    theme_classic() +
+    theme(
+      strip.background.x = element_blank(),
+      strip.background.y = element_blank(),
+      strip.text.x = ggtext::element_markdown(size = 13),
+      strip.text.y = ggtext::element_markdown(size = 13),
+      axis.title.x = ggtext::element_markdown(size = 13),
+      axis.title.y = ggtext::element_markdown(size = 13),
+      axis.text.y = ggtext::element_markdown(),
+      legend.title = ggtext::element_markdown(size = 13),
+      legend.text = ggtext::element_markdown(size = 11),
+      legend.position = "bottom",
+      panel.spacing = unit(0.2, "in")
+    )
+  
+  ggsave(
+    file_plot,
+    plot = res_plot,
+    width = 7.8, height = 7, 
+    dpi = 300,
+    device = cairo_pdf
+  )
+  
+  file_plot
+  
+}
+
+
+#' Plot of total porosity versus gamma
+#' 
+#' @export
+irp_make_plot_30 <- function(dd_res_reconstructions_1, file_plot = "figures/dd_plot_30.pdf") {
+  
+
+  
+  d_plot <- 
+    dd_res_reconstructions_1$d_macrofossil_summary |>
+    dplyr::mutate(
+      sample_depth_mid = (sample_depth_upper + sample_depth_lower) / 2,
+      total_porosity_1 = 
+        irp_set_units_rvar(posterior::rvar(1), "L/L", mode = "standard") - volume_fraction_solids_1
+    ) |>
+    dplyr::left_join(
+      dd_res_reconstructions_1$d_macrofossil |>
+        dplyr::group_by(core_label, id_sample) |>
+        dplyr::summarise(
+          w = sum(w[stringr::str_detect(taxon_rank_value, "Sphagnum")]),
+          .groups = "drop"
+        ),
+      by = c("core_label", "id_sample")
+    )
+  
+  res_plot <- 
+    d_plot |>
+    dplyr::mutate(
+      core_label =
+        core_label |>
+        stringr::str_remove(pattern = "^eb\\d{4}_"),
+      dplyr::across(
+        dplyr::starts_with("gamma_"),
+        function(.x) {
+          purrr::map(.x, function(.x2) {
+            tibble::tibble(
+              gamma_mean = mean(.x2),
+              gamma_lower = posterior::quantile2(.x2, probs = 0.1),
+              gamma_upper = posterior::quantile2(.x2, probs = 0.9)
+            )
+          })
+        }
+      )
+    ) |>
+    tidyr::pivot_longer(
+      cols = dplyr::starts_with("gamma_"),
+      names_to = "model",
+      values_to = "value"
+    ) |>
+    dplyr::mutate(
+      model =
+        model |>
+        stringr::str_extract(pattern = "\\d+$"),
+      total_porosity_1_in_pd =
+        ifelse(volume_fraction_solids_1_in_pd, "yes", "no")
+    ) |>
+    tidyr::unnest(value) |>
+    ggplot(aes(x = gamma_mean)) +
+    geom_errorbar(
+      aes(
+        ymin = posterior::quantile2(total_porosity_1, probs = 0.1),
+        ymax = posterior::quantile2(total_porosity_1, probs = 0.9)
+      ),
+      width = 0, color = "grey"
+    ) +
+    geom_errorbarh(
+      aes(
+        y = median(total_porosity_1),
+        xmin = gamma_lower,
+        xmax = gamma_upper
+      ),
+      height = 0, color = "grey"
+    ) +
+    geom_point(aes(y = median(total_porosity_1), color = sample_depth_mid, shape = total_porosity_1_in_pd)) +
+    guides(
+      color = guide_legend(direction = "vertical", title = "Depth (cm)", override.aes = list(size = 3), ncol = 3),
+      shape = guide_legend(direction = "vertical", title = "<i>K</i><sub>sat</sub> in prediction domain?", override.aes = list(size = 3))
+    ) +
+    facet_grid(model ~ core_label) +
+    labs(
+      y = "Total porosity (L L<sup>-1</sup>)",
+      x = "&gamma; (g g<sup>-1</sup>)"
+    ) +
+    #scale_y_continuous(labels = function(x) paste0("10<sup>", x, "</sup>")) +
+    theme_classic() +
+    theme(
+      strip.background.x = element_blank(),
+      strip.background.y = element_blank(),
+      strip.text.x = ggtext::element_markdown(size = 13),
+      strip.text.y = ggtext::element_markdown(size = 13),
+      axis.title.x = ggtext::element_markdown(size = 13),
+      axis.title.y = ggtext::element_markdown(size = 13),
+      axis.text.y = ggtext::element_markdown(),
+      legend.title = ggtext::element_markdown(size = 13),
+      legend.text = ggtext::element_markdown(size = 11),
+      legend.position = "bottom",
+      panel.spacing = unit(0.2, "in")
+    )
+  
+  ggsave(
+    file_plot,
+    plot = res_plot,
+    width = 7.8, height = 7, 
     dpi = 300,
     device = cairo_pdf
   )

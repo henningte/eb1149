@@ -1,0 +1,78 @@
+---
+output: github_document
+bibliography: references.bib
+---
+
+<!-- README.md is generated from README.Rmd. Please edit that file -->
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+```{r, include=FALSE}
+# to force inclusion of the irpeatmodels package into the renv lock file
+irpeatmodels::model_ks_1_config
+```
+
+
+## Compendium of R code and data for "`r rmarkdown::yaml_front_matter('dd-paper.Rmd')$title`"
+
+This repository contains the data and code for our manuscript:
+
+> Teickner, Henning, Julien Arsenault, Mariusz Gałka, and Klaus-Holger Knorr. 2025. "Estimation of the Degree of Decomposition of Peat and Past Net Primary Production from Mid-Infrared Spectra." (unpublished).
+
+
+### How to cite
+
+Please cite this compendium as:
+
+> Teickner, Henning, Julien Arsenault, Mariusz Gałka, and Klaus-Holger Knorr, (`r format(Sys.Date(), "%Y")`). Compendium of R code and data for "Estimation of the Degree of Decomposition of Peat and Past Net Primary Production from Mid-Infrared Spectra." Accessed `r format(Sys.Date(), "%d %b %Y")`. <https://github.com/henningte/eb1149>
+
+### How to use
+
+Instructions how to set up the Docker containers to reproduce the computations are available from the Dockerfile. The Dockerfile also provides instructions to run the [`targets`](https://github.com/ropensci/targets) workflow to reproduce all computations and eventually the manuscript and supporting information.
+
+### Licenses
+
+**Text and figures :**  [CC-BY-4.0](http://creativecommons.org/licenses/by/4.0/)
+
+**Code :** See the [DESCRIPTION](DESCRIPTION) file
+
+**Data :** [CC-0](http://creativecommons.org/publicdomain/zero/1.0/) attribution requested in reuse. See the sources section for licenses for data derived from external sources, their licenses, and how to give credit to the original author(s) and the source.
+
+
+### Sources
+
+Data in folder `data/raw_data` are derived from different sources. To use these data and give credit to data authors, please follow the following information:
+
+- [:file\_folder: pmird](data/raw_data/pmird): This is a template folder in which the folder `pmird_prepared_data` from the pmird database needs to be stored to reproduce the computations. This folder is available from https://doi.org/10.5281/zenodo.17092587.
+
+- [:file\_folder: ecy2462-sup-0005-npp_moss.csv](data/raw_data/ecy2462-sup-0005-npp_moss.csv): This is one of the csv files contained in the Peatland Decomposition and Productivity Database [@Bona.2018]. The reproduction
+is a copy of an official work that is published by Natural Resources Canada (NRCan) and has not been produced in affiliation with, or with the endorsement of, NRCan. Commercial reproduction and distribution are prohibited except with written permission from NRCan. For more information, contact NRCan at copyright.droitdauteur@nrcan-rncan.gc.ca.
+
+    The full copyright statement is: © Her Majesty the Queen in Right of Canada, 2018. Information contained in this publication or product may be reproduced, in part or in whole, and by any means, for personal or public noncommercial purposes, without charge or further permission, unless otherwise specified. You are asked to exercise due diligence in ensuring the accuracy of the materials reproduced; indicate the complete title of the materials reproduced, and the name of the author organization; and indicate that the reproduction is a copy of an official work that is published by Natural Resources Canada (NRCan) and that the reproduction has not been produced in affiliation with, or with the endorsement of, NRCan. Commercial reproduction and distribution are prohibited except with written permission from NRCan. For more information, contact NRCan at copyright.droitdauteur@nrcan-rncan.gc.ca. 
+    
+    See @Bona.2018 (<https://esajournals.onlinelibrary.wiley.com/doi/full/10.1002/ecy.2462>) for details.
+
+- [:file\_folder: Bengtsson_etal_sph_holarctic_growth.csv](data/raw_data/Bengtsson_etal_sph_holarctic_growth.csv): csv file from @Bengtsson.2020 (these data are described in more detail in @Bengtsson.2021). License: [CC-0](https://creativecommons.org/publicdomain/zero/1.0/). See <http://datadryad.org/stash/dataset/doi:10.5061/dryad.1ns1rn8rm> for details.
+
+- [:file\_folder: d88_2.rds, d89_2.rds, d90_1.rds](data/raw_data): These are average testate amoebae-reconstructed water table depth for the peat cores analyzed in our manuscript, digitized from figures in the original publications [@Galka.2022a; @Galka.2022; @Diaconu.2020]. License: [CC-0](https://creativecommons.org/publicdomain/zero/1.0/)
+
+- [:file\_folder: pangaea_metadata_reuter2019.rds](data/raw_data/pangaea_metadata_reuter2019.rds): rds file with the metadata from @Reuter.2019b, extracted from the Pangaea repository using the `pangaear` R package [@Chamberlain.2025]. License: [CC-BY-4.0](https://creativecommons.org/licenses/by/4.0/). For details, see <https://doi.pangaea.de/10.1594/PANGAEA.902181>.
+
+- [:file\_folder: eb1064](data/raw_data/eb1064): Folder with preprocessed data from @Arsenault.2024b (the contents of the folder were not directly derived from @Arsenault.2024b, but processed from the same original raw data files) and containing in addition the mid-infrared spectra for the samples in @Arsenault.2024b (for an overview on the data, see @Arsenault.2024a).
+
+
+### Contributions
+
+We welcome contributions from everyone. Please note that the eb1149 project is released with a [Contributor Code of Conduct](https://contributor-covenant.org/version/2/0/CODE_OF_CONDUCT.html). By contributing to this project, you agree to abide by its terms.
+
+### Funding
+
+This study was funded by the Deutsche Forschungsgemeinschaft (DFG, German Research Foundation) grant no. KN 929/23-1 to Klaus-Holger Knorr and grant no. PE 1632/18-1 to Edzer Pebesma.
+
+### References
+

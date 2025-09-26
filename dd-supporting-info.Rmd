@@ -35,7 +35,7 @@ affiliations:
   - number: 2
     text: "Spatiotemporal Modelling Lab, Institute for Geoinformatics, University of Münster, 48149, Germany"
   - number: 3
-    text: "Département de Géographie, Université de Montréal, Montréal, H2V 0B3, Canada"
+    text: "Département des Sciences biologiques, Université du Québec à Montréal, Montréal, H2X 1Y4, Canada"
   - number: 4
     text: "University of Lodz, Faculty of Biology and Environmental Protection, Department of Biogeography, Paleoecology and Nature Conservation, Banacha 1/3, 90-237 Łodz, Poland"
 #  - number: "**"
@@ -115,6 +115,23 @@ cat(dd_make_affiliation_list(rmarkdown::metadata$affiliations))
 ```
 
 
+# Age-depth-models for peat cores {#dd-sup-age-depth-model}
+
+```{r, results='asis'}
+tar_load(dd_plot_21)
+tar_load(dd_rbacon_csv)
+target_core_label <- stringr::str_extract(names(dd_rbacon_csv), pattern = "(MH1|MK1|OD2)")
+
+for(i in seq_along(dd_plot_21)) {
+  cat(paste0('(ref:dd-plot-21-', i, '-caption) rbacon Age-depth model for core ', target_core_label[[i]], '.\n\n'))
+}
+```
+
+
+```{r dd-plot-21, fig.cap=paste0('(ref:dd-plot-21-', seq_along(dd_plot_21), '-caption)'), out.width='100%'}
+knitr::include_graphics(dd_plot_21)
+```
+
 
 # Peat samples within and outside prediction domains of the models
 
@@ -131,7 +148,7 @@ knitr::include_graphics(tar_read(dd_plot_18))
 ```
 
 
-# Sensitivity analyses for prediction models when mixing a mineral-rich or decomposed sample to selected litter samples
+# Sensitivity of $\gamma_\text{MIRS}$ to admixtures of minerals and strongly decomposed peat
 
 (ref:dd-plot-16-caption) Preprocessed spectrum (clipped, baseline corrected, normalized) for the mineral-rich peat sample from the pmird database [@Drollinger.2019; @Drollinger.2020]
 
@@ -174,202 +191,12 @@ knitr::include_graphics(tar_read(dd_plot_6_1)[-2])
 ```
 -->
 
-# Using $\gamma_\text{MIRS}(t)$ as estimate for the degree of decomposition of a dominant component in a peat sample {#dd-gamma-as-estimate-for-gamma-of-dominant-component}
 
-(ref:dd-plot-24-caption) Error when using the theoretical degree of decomposition predicted from MIRS for a bulk peat sample ($\gamma_\text{MIRS}(t)$) as estimate for the degree of decomposition of the first component in the two-component system simulated in section \@ref(main-dd-methods-bias-simulation-1) in the main text (compare also with Fig. \@ref(main-fig:dd-plot-22) in the main text). The vertical line shows when the mass fraction of the first component is 90%.
+# Estimating relative differences of optimal decomposition rates between litter types and the decrease of decomposition rates as mass is lost from $\gamma_\text{MIRS}$ {#dd-rate-differences-1}
 
-```{r dd-plot-24, fig.cap='(ref:dd-plot-24-caption)', out.width='100%'}
-knitr::include_graphics(tar_read(dd_plot_24))
-```
-
-
-<!--# Naive reconstruction of past NPP from peat masses and average degree of decomposition {#dd-naive-reconstruction}
-
-Let $m_j(t)$ be the mass of component $j$ of a peat sample at time $t$, $t_0$ be the time at which a layer was initially formed, such that $m_j(t_0)$ is considered the initial mass. Then the degree of decomposition of component $j$ at time $t$ is $\gamma_j(t) = \frac{m_j(t_0) - m_j(t)}{m_j(t_0)}$.  
-
-The degree of decomposition of a peat sample consisting of $n$ components is the mass-weighted average of the degree of decomposition of each component:
-
-\begin{equation}
-\gamma(t) = \frac{1}{\sum_j^n m_j(t)} \sum_j^n \left(m_j(t) \frac{m_j(t_0) - m_j(t)}{m_j(t_0)} \right)
-(\#eq:eq-dd-naive-reconstruction-1)
-\end{equation}
-
-The true NPP is:
-
-\begin{equation}
-m(t_0) = \sum_j^n m_j(t_0) = \sum_j^n \frac{m_j(t)}{1 - \gamma_j(t)}
-(\#eq:eq-dd-naive-reconstruction-2)
-\end{equation}
-<!-- = \sum_j \frac{m_j(t)}{1 - \frac{m_j(t = t_0) - m_j(t)}{m_j(t = t_0)}} = \sum_j \frac{m_j(t)}{\frac{m_j(t)}{m_j(t = t_0)}}-->
-
-<!--For a two-component system, this is:
-
-$$
-\begin{aligned}
-m(t = t_0) = \frac{m_1(t)}{1 - \gamma_1(t)} + \frac{m_2(t)}{1 - \gamma_2(t)} = \frac{m_1(t)(1 - \gamma_2(t)) + m_2(t)(1 - \gamma_1(t))}{(1 - \gamma_1(t))(1 - \gamma_2(t))} =\\
-\frac{\sum_j m_j(t) + \gamma_2(t) m_1(t) + \gamma_1(t) m_2(t)}{1 - \gamma_1(t) - \gamma_2(t) + \gamma_1(t)\gamma_2(t)} = \frac{m(t) + \gamma_2(t) m_1(t) + \gamma_1(t) m_2(t)}{1 - \gamma_1(t) - \gamma_2(t) + \gamma_1(t)\gamma_2(t)} =\\
-m(t) \frac{1 + \gamma_2(t) \beta_1(t) + \gamma_1(t) \beta_2(t)}{1 - \gamma_1(t) - \gamma_2(t) + \gamma_1(t)\gamma_2(t)} = m(t) \frac{1 + \gamma_2(t) \beta_1(t) + \gamma_1(t) (1 - \beta_1(t))}{1 - \gamma_1(t) - \gamma_2(t) + \gamma_1(t)\gamma_2(t)} =\\
-m(t) \frac{1 + \gamma_1(t) + \beta_1(t)(\gamma_2(t) - \gamma_1(t))}{1 - \gamma_1(t) - \gamma_2(t) + \gamma_1(t)\gamma_2(t)}
-\end{aligned}
-$$
--->
-
-<!--However, the naive reconstruction of NPP computes:
-
-\begin{equation}
-m(t_0)_\text{naive} = \frac{\sum_j^n m_j(t)}{1 - \gamma(t)} = \frac{\sum_j^n m_j(t)}{1 - \frac{1}{\sum_j^n m_j(t)} \sum_j^n \left(m_j(t) \gamma_j(t) \right)}
-(\#eq:eq-dd-naive-reconstruction-3)
-\end{equation}
-
-If all components have the same degree of decomposition, then $\gamma_j(t) = \gamma(t)$, and only then are both values equal:
-
-\begin{equation}
-m(t_0) = \sum_j^n \frac{m_j(t)}{1 - \gamma_j(t)} = \frac{\sum_j^nm_j(t)}{1 - \gamma(t)} = m(t_0)_\text{naive}.
-(\#eq:eq-dd-naive-reconstruction-4)
-\end{equation}
-
-\@ref(eq:eq-dd-naive-reconstruction-4)-->
-
-<!--For a two-component system, this is:
-
-$$
-\begin{aligned}
-m(t = t_0)_\text{naive} = 
-\frac{m(t)}{1 - \frac{1}{m(t)} \left( m_1(t) \gamma_1(t) + m_2(t) \gamma_2(t) \right)} = 
-\frac{m(t)}{\frac{m(t) - m_1(t) \gamma_1(t) - m_2(t) \gamma_2(t)}{m(t)}} = \\
-\frac{(m(t))^2}{m(t) - m_1(t) \gamma_1(t) - m_2(t) \gamma_2(t)} = 
-m(t) \frac{1}{1 - \beta_1(t) \gamma_1(t) - \beta_2(t) \gamma_2(t)} =\\
-m(t) \frac{1}{1 - \beta_1(t) \gamma_1(t) - (1 - \beta_1(t)) \gamma_2(t)} =
-m(t) \frac{1}{1 - \gamma_2(t) + \beta_1(t) (\gamma_2(t) - \gamma_1(t)) }
-\end{aligned}
-$$
-
-Then:
-
-$$
-m(t = t_0)_\text{naive} - m(t = t_0) = \frac{1}{1 - \gamma_2 + \beta_1 (\gamma_2 - \gamma_1)} - \frac{1 - \gamma_1 - \gamma_2 + \gamma_1\gamma_2}{1 + \gamma_1 + \beta_1(\gamma_2 - \gamma_1)} =\\
-\frac{1 + \gamma_1 + \beta_1(\gamma_2 - \gamma_1) - (1 - \gamma_1 - \gamma_2 + \gamma_1\gamma_2)}{(1 - \gamma_2 + \beta_1 (\gamma_2 - \gamma_1)) (1 + \gamma_1 + \beta_1(\gamma_2 - \gamma_1))}
-$$
--->
-
-<!--To analyze how $m(t_0)_\text{naive}$ differs from $m(t_0)$, we simulated peat samples with two components ($j \in \{1,2\}$), $t>t_0$, $m_2(t) = `r dd_simulation_1 |> dplyr::pull(m_2_1) |> unique()`$, $m_1(t) \in [`r dd_simulation_1 |> dplyr::pull(m_1_1) |> range() |> paste(collapse = ", ")`]$, $\gamma_1(t), \gamma_2(t) \in [`r unique(dd_simulation_1 |> dplyr::pull(gamma_1) |> range() |> paste(collapse = ", "), dd_simulation_1 |> dplyr::pull(gamma_2) |> range() |> paste(collapse = ", "))`]$, and then computed $\frac{m(t_0)}{m(t_0)_\text{naive}}$. Figure \@ref(fig:dd-plot-13) shows this ratio versus $\frac{m_1(t)}{m_2(t)}$ for different levels of $\gamma_1(t)$ and with lines colored according to $\gamma_1(t) - \gamma_2(t)$.  
-
-(ref:dd-plot-13-caption) Values of $\frac{m(t_0)}{m(t_0)_\text{naive}}$ versus $\frac{m_1(t)}{m_2(t)}$ for different levels of $\gamma_1(t)$ (columns) and with lines colored according to $\gamma_1(t) - \gamma_2(t)$. The x axis is log-scaled.
-
-```{r dd-plot-13, fig.cap='(ref:dd-plot-13-caption)', out.width='100%'}
-knitr::include_graphics(tar_read(dd_plot_13))
-```
--->
-
-
-# Reconstruction of past average *Sphagnum* NPP for periods during the Holocene from peat masses and the degree of decomposition {#dd-naive-reconstruction-applied}
-
-```{r}
-tar_load(dd_plot_19_1)
-```
-
-Assume the same two-component peat sample as in the main text (section \@ref(main-dd-methods-bias-simulation-1)) and let $m_1(t_0)_\text{naive} = \frac{m_1(t)}{1 - \gamma_\text{MIRS}(t)}$, i.e., this is the formula one would use to reconstruct the initial mass or NPP of component 1 of a peat sample if $\gamma_1(t)$ was known, except that we use $\gamma_\text{MIRS}(t)$ (the degree of decomposition predicted from MIRS for the whole peat sample) instead of $\gamma_1(t)$. This will introduce some bias and here, we explore under what conditions this bias is not too large.
-
-To analyze how $m_1(t_0)_\text{naive}$ differs from $m_1(t_0)$, we used the same simulation as in section \@ref(main-dd-methods-bias-simulation-1) in the main text and computed $m_1(t_0)_\text{naive}$ as described above. Fig. \@ref(fig:dd-plot-19-1) shows the results for all $\frac{m_1(t)}{m(t)} > `r dd_plot_19_1[["mass_fraction_threshold"]]`$.
-
-(ref:dd-plot-19-1-caption) Values of $\frac{m_1(t_0)}{m_1(t_0)_\text{naive}}$ versus $\frac{m_1(t)}{m(t)}$ for different levels of $\gamma_1(t)$ (columns) and with lines colored according to $\gamma_1(t) - \gamma_2(t)$. Only values with $\frac{m_1(t)}{m(t)} > `r dd_plot_19_1[["mass_fraction_threshold"]]`$ are shown. The dashed horizontal lines represent a value of $\frac{m_1(t_0)_\text{naive}}{m_1(t_0)}$ of $1 \pm `r dd_plot_19_1[["error_threshold"]]`$.  
-
-```{r dd-plot-19-1, fig.cap='(ref:dd-plot-19-1-caption)', out.width='100%'}
-knitr::include_graphics(dd_plot_19_1$file_plot)
-```
-
-To reconstruct the average NPP of the *Sphagnum* species, we first estimated age-depth models using $^{14}$C dates for the cores from the pmird database using rbacon [@Blaauw.2017] (age-depth modeling results are shown in supporting section \@ref(dd-sup-age-depth-model)). Assuming that volume fractions in macrofossil analysis are directly proportional to mass fractions (irrespective of macrofossil type) and that hummock and lawn *Sphagnum* have a smaller degree of decomposition than other components of the same peat sample<!-- (and thus $\gamma_{Sphagnum}(t) <= \gamma(t)$)-->, we then selected layers for which we assume that the naive reconstruction of initial masses produces estimates with absolute bias smaller than 20% based on the simulation results shown in Fig. \@ref(fig:dd-plot-19-1): layers that have a volume fraction of a single *Sphagnum* macrofossil type (one species or a group of two related species for which we assume similar decomposition rates) of at least 90% and a degree of decomposition $\le 60$%. Next, we used each of our models to estimate the degree of decomposition for these layers (Tab. \@ref(tab:dd-tab-dd-reconstruction-initial-mass-rate-1-dd)), used the naive approach described above to reconstruct the initial layer mass, and divided the result by the duration of layer formation computed as difference of the age of the lower and upper boundaries. By our assumptions, we take this value to represent the NPP of the *Sphagnum* species or species group. The results are shown in Tab. \@ref(main-tab:dd-tab-dd-reconstruction-initial-mass-rate-1) in the main text and supporting Fig. \@ref(fig:dd-plot-20).
-
-We conducted this analysis using MCMC draws for the degree of decomposition and for layer ages and therefore errors in estimates for the degree of decomposition and peat ages, assuming the respective models are correct, are considered. Some of the MCMC draws led to overflow (infinite NPP; this happens when the degree of decomposition is very large), indicating too wide error estimates in such cases. To stabilize the values, we set the degree of decomposition of individual MCMC draws to 98% when they were larger than 98%.
-
-
-(ref:dd-plot-20-caption) Estimated average NPP versus layer age for different *Sphagnum* species or species groups in layers of three peat cores (columns) and using the degree of decomposition predicted by the three models (rows). Points are medians, thicker error bars central 50% prediction intervals, and smaller error bars central 90% prediction intervals.
-
-```{r dd-plot-20, fig.cap='(ref:dd-plot-20-caption)', out.width='100%'}
-knitr::include_graphics(tar_read(dd_plot_20))
-```
-
-
-```{r}
-dd_reconstruction_initial_mass_rate_1_summary <- 
-  dd_reconstruction_initial_mass_rate_1 |>
-  dplyr::select(taxon_rank_value, core_label, id_model, degree_of_decomposition, initial_mass_rate, degree_of_decomposition_in_pd) |>
-  dplyr::group_by(taxon_rank_value, core_label, id_model) |>
-  dplyr::summarise(
-    dplyr::across(
-      dplyr::all_of(c("degree_of_decomposition", "initial_mass_rate")),
-      posterior::rvar_mean
-    ),
-    degree_of_decomposition_in_pd = sum(degree_of_decomposition_in_pd)/length(degree_of_decomposition_in_pd),
-    .groups = "drop"
-  )
-```
-
-
-(ref:tab-dd-tab-dd-reconstruction-initial-mass-rate-1-dd-caption) Estimated average degree of decomposition (%) for different *Sphagnum* species or species groups in layers of three peat cores and using the degree of decomposition predicted by the three models ($\gamma_\text{MIRS}(t)$). Values are given as averages and boundaries of 95% prediction intervals and are averages of of the average NPP for individual layers for the same model, species or species group, and core. Superscripts are levels for the fraction of layers within the prediction domain for the prediction models: $^1$: $[0, 50]$%, $^2$: $(50, 80]$%, $^3$: $(80, 100]$%.
-
-```{r dd-tab-dd-reconstruction-initial-mass-rate-1-dd, tab.cap='(ref:tab-dd-tab-dd-reconstruction-initial-mass-rate-1-dd-caption)', message=FALSE, warning=FALSE, fig.pos='H'}
-dd_reconstruction_initial_mass_rate_1_summary |>
-  dplyr::mutate(
-    degree_of_decomposition = degree_of_decomposition * 100,
-    initial_mass_rate = initial_mass_rate / 1000,
-    degree_of_decomposition_in_pd =
-      dplyr::case_when(
-        degree_of_decomposition_in_pd <= 0.5 ~ "1", 
-        degree_of_decomposition_in_pd <= 0.8 ~ "2", 
-        TRUE ~ "3"
-      ),
-    dplyr::across(
-      dplyr::all_of(c("degree_of_decomposition", "initial_mass_rate")),
-      function(.x) {
-        digits =
-          switch(
-            dplyr::cur_column(),
-            "degree_of_decomposition" = 0,
-            "initial_mass_rate" = 1
-          )
-        paste0(.x |> mean() |> round(digits), " (", .x |> posterior::quantile2(probs = 0.025) |> round(digits), ", ", .x |> posterior::quantile2(probs = 0.975) |> round(digits), ")$^{", degree_of_decomposition_in_pd, "}$")
-        }
-    ),
-    core_label =
-      dplyr::case_when(
-        core_label == "eb1005_MH1" ~ "MH1",
-        core_label == "eb1006_MK1" ~ "MK1",
-        core_label == "eb1018_OD2" ~ "OD2"
-      ) |>
-      factor(levels = c("MH1", "MK1", "OD2")),
-    taxon_rank_value =
-      paste0("$", taxon_rank_value, "$") |>
-      stringr::str_replace_all(" ", "~")
-  ) |>
-  dplyr::arrange(taxon_rank_value, core_label, id_model) |>
-  dplyr::select(-initial_mass_rate, -degree_of_decomposition_in_pd) |>
-  tidyr::pivot_wider(
-    names_from = "id_model",
-    values_from = "degree_of_decomposition"
-  ) |>
-  kableExtra::kable(
-    format = "latex",
-    booktabs = TRUE, 
-    longtable = FALSE,
-    escape = FALSE, 
-    row.names = FALSE,
-    col.names = c("Species group", "Core", 1:3)
-  ) |>
-  kableExtra::kable_styling(latex_options = c("scale_down")) |>
-  kableExtra::add_header_above(c(" " = 2, "Model" = 3)) |>
-  kableExtra::collapse_rows(1, latex_hline = "none", valign = "top") |>
-  kableExtra::row_spec(0, align = "c")
-```
-
-
-
-# Definition of decomposition progress in decomposition formulas and analysis of the differences in the degree of decompostion of two litter types decomposing under the same environmental conditions {#dd-rate-differences-1}
-
-We define the decomposition progress as the sum of environmental controls on decomposition rates over the time steps (assuming that environmental conditions are constant within a time step). Thus, when environmental conditions are favorable for decomposition, one time step will increase the decomposition progress more than when environmental conditions limit decomposition.
-
-Calculation of the degree of decomposition and mass loss are straightforward in the two decomposition models described in @Frolking.2001 (exponential decay and decomposition with rates slowing down as decomposition progresses; these models are also part of the Holocene Peatland Model [@Frolking.2010] and other peatland models [e.g., @Morris.2012]). Therefore, if we compute remaining masses of two litter types that decomposed under the same environmental conditions (for example because they are part of the same peat layer), we can separate the litter type-specific decomposition rate from the scaling by environmental conditions over time (the decomposition progress). This allows efficient computation of remaining masses under step-wise constant environmental conditions over time and it allows comparisons of the degree of decomposition between litter types under the same decomposition progress. 
-
+Here, we show that $\gamma_\text{MIRS}$ may be useful to estimate relative differences of optimal decomposition rates between litter types, or alternatively the slow-down of decomposition the more of the initial mass is lost, as assumed in the decomposition module of the Holocene Peatland Model (HPM) [@Frolking.2001; @Frolking.2010]. To this end, we first show that when assuming exponential decay or the decomposition module of the HPM, decomposition under the same environmental conditions simply scales the litter type-specific optimal decomposition rate by the combined effect of environmental conditions over time (we call this combined effect the decomposition progress). This allows to cancel the influence of environmental conditions from the decomposition formulas when taking the difference or ratio of the decomposition formulas for litter types decomposing under the same environmental conditions, which allows to estimate the ratio of optimal decomposition rates for the litter types or the decrease of decomposition rates as decomposition progresses, given that $\gamma$ of each litter type and the respective other term (the litter-specific decomposition rates or the decrease of decomposition rates as decomposition progresses are known).  
+We define the decomposition progress as the sum of environmental controls on decomposition rates over the time steps (assuming that environmental conditions are constant within a time step). Thus, when environmental conditions are favorable for decomposition, one time step will increase the decomposition progress more than when environmental conditions limit decomposition.  
+Calculation of $\gamma$ and mass loss are straightforward in the two decomposition models described in @Frolking.2001 (exponential decay and decomposition with rates slowing down as decomposition progresses; these models are also part of the Holocene Peatland Model [@Frolking.2010] and other peatland models [e.g., @Morris.2012]). Therefore, if we compute remaining masses of two litter types that decomposed under the same environmental conditions (for example because they are part of the same peat layer), we can separate the litter type-specific decomposition rate from the scaling by environmental conditions over time (the decomposition progress). This allows efficient computation of remaining masses under step-wise constant environmental conditions over time and it allows comparisons of $\gamma$ between litter types under the same decomposition progress.  
 The first decomposition model is the solution of equation (3) in @Frolking.2001 with $\alpha = 1$, which is exponential decay as used in many models [e.g., @Clymo.1984]:
 
 \begin{equation}
@@ -405,7 +232,7 @@ which becomes
 (\#eq:eq-dd-rate-differences-5)
 \end{equation}
 
-when we include environmental controls of the decomposition rate, $f_j(t)$. Assuming again that $f_j(x)$ is constant for intervals on the defined time grid, we can solve the differential equation for the time period $[t_0, t_0 + n\Delta t]$ ($\Delta t$ is the resolution of the time grid, which here is set to 1, $n$ is a natural number) as follows:
+when we include environmental controls of the decomposition rate, $f_j(t)$. Assuming again that $f_j(t)$ is constant for intervals on the defined time grid, we can solve the differential equation for the time period $[t_0, t_0 + n\Delta t]$ ($\Delta t$ is the resolution of the time grid, which here is set to 1, $n$ is a natural number) as follows:
 
 \begin{equation}
 \begin{aligned}
@@ -420,32 +247,9 @@ when we include environmental controls of the decomposition rate, $f_j(t)$. Assu
 (\#eq:eq-dd-rate-differences-6)
 \end{equation}
 
-Thus, we can use the decomposition progress as defined at the start of this subsection ($\sum_{z = 1}^{n} f_j(t_0 + z)$) with both decomposition formulas to analyze how the degree of decomposition of two litter types decomposing under the same environmental conditions (= having the same decomposition progress) differs. 
-
-We simulated decomposition of two litter types using equation \@ref(eq:eq-dd-rate-differences-3), where the first has a decomposition rate of `r dd_simulation_4$k_0_1 |> unique() |> knitr::combine_words(and = " or ")` yr$^{-1}$, the second has decomposition rates ranging from `r dd_simulation_4$k_0_2 |> range() |> knitr::combine_words(and = " to ")` yr$^{-1}$, $\alpha$ is `r dd_simulation_4$alpha |> unique() |> knitr::combine_words(and = " or ")`, and we changed the decomposition progress from `r dd_simulation_4$decomposition_progress |> range() |> knitr::combine_words(and = " to ")`, which means that the smallest degree of decomposition of the sample containing both litter types is `r dd_simulation_4 |> dplyr::filter(decomposition_progress == max(decomposition_progress)) |> dplyr::mutate(gamma = (gamma_1 + gamma_2) / 2) |> dplyr::pull(gamma) |> min() |> round(2)` g g$^{-1}$. 
-
-Figure \@ref(fig:dd-plot-25) shows the difference in the degree of decomposition of both components ($\gamma_1(t) - \gamma_2(t)$) versus the decomposition progress in these scenarios. To give more context, Fig. \@ref(fig:dd-plot-26) shows how the degree of decomposition is related to the decomposition progress in these scenarios. As the Fig. \@ref(fig:dd-plot-25) shows, $|\gamma_1(t) - \gamma_2(t)| < 0.5$ g g$^{-1}$ when none of the components has a very small or very large decomposition rate and the more decomposition slows down as mass is lost (the larger $\alpha$). This indicates that conditions under which $\gamma_\text{MIRS}$ does not underestimate $\gamma$ much can be identified with more information on $\alpha$ and the decompsition rates of individual litter types. 
-
-For most *Sphagnum* species, decomposition rates are within a relative narrow range [@Teickner.2025] which indicates that for *Sphagnum* peat, no matter of what species it consists, $|\gamma_1(t) - \gamma_2(t)|$ may be comparatively small (if all *Sphagnum* components have a degree of decomposition not exceeding 0.9 g g$^{-1}$, this may indicate that $\gamma_\text{MIRS}$ does not underestimate $\gamma$ much; see section \@ref(main-dd-discussion-gamma-mirs-bias) in the main text). We do not give detailed recommendations here because more accurate estimates for decomposition rates, $\alpha$, and how well the different decomposition models represent decomposition on longer time scales is not available [@Frolking.2001; @Teickner.2025].   
-
-(ref:dd-plot-25-caption) Difference in the degree of decomposition ($\gamma_1(t) - \gamma_2(t)$) of the simulated litter types decomposing under the same environmental conditions versus the decomposition progress. Columns are scenarios with different value for $\alpha$. Rows are scenarios with different values for the decomposition rate of the first litter type ($k_{0,1}$). Each line has values for a distinct value for the decomposition rate of the second litter type ($k_{0,2}$). The two horizontal lines enclose the region where $|\gamma_1(t) - \gamma_2(t)| \le 0.5$ g g$^{-1}$. The x axis is log$_{10}$-scaled.
-
-```{r dd-plot-25, fig.cap='(ref:dd-plot-25-caption)', out.width='100%'}
-knitr::include_graphics(tar_read(dd_plot_25))
-```
-
-(ref:dd-plot-26-caption) Degree of decomposition of the sample consisting of both litter types ($\gamma(t)$) versus the decomposition progress in the simulated scenarios. The x axis is log$_{10}$-scaled.
-
-```{r dd-plot-26, fig.cap='(ref:dd-plot-26-caption)', out.width='100%'}
-knitr::include_graphics(tar_read(dd_plot_26))
-```  
-
-
-# Estimating relative differences of optimal decomposition rates between litter types from dated peat layers {#dd-rate-differences-2}
-
-If the two decomposition models mentioned in the previous subsection are accurate and we have measured the degree of decomposition of two litter types from the same peat layer, we can compute the difference or ratio of their litter type-specific decomposition rates ($k_{0,i}$) under optimal conditions. Alternatively, when we know the litter type-specific decomposition rates under optimal conditions for two litter types in the same peat layer, we can estimate $\alpha$. This is useful because $\alpha$ can neither be estimated accurately from litterbag data nor from fitting decomposition models to dated peat cores [@Frolking.2001; @Teickner.2025]. Of course, this approach assumes that decomposition happens according to eq. \@ref(eq:eq-dd-rate-differences-6). Therefore, it is also useful to compare $\alpha$ estimated across different layers.
-
-To show that these computations are possible, assume that there are two litter types in layer $j$, say $i=1$ is *S. fuscum* material and $i=2$ is *Calluna vulgaris* leaf material. For the first model, the decomposition rate for litter type $i$ can be derived from eq. \@ref(eq:eq-dd-rate-differences-2):
+Thus, we can use the decomposition progress as defined at the start of this subsection ($\sum_{z = 1}^{n} f_j(t_0 + z)$) with both decomposition formulas to analyze how $\gamma$ of two litter types decomposing under the same environmental conditions (= having the same decomposition progress) differs.  
+If the two decomposition models are accurate and we have measured $\gamma$ of two litter types from the same peat layer, we can compute the difference or ratio of their litter type-specific decomposition rates ($k_{0,i}$) under optimal conditions. Alternatively, when we know the litter type-specific decomposition rates under optimal conditions for two litter types in the same peat layer, we can estimate $\alpha$. This is useful because $\alpha$ can neither be estimated accurately from litterbag data nor from fitting decomposition models to dated peat cores [@Frolking.2001; @Teickner.2025]. Of course, this approach assumes that decomposition happens according to equation \@ref(eq:eq-dd-rate-differences-6). Therefore, it is also useful to compare $\alpha$ estimated across different layers.  
+To show that these computations are possible, assume that there are two litter types in layer $j$, say $i=1$ is *S. fuscum* material and $i=2$ is *Calluna vulgaris* leaf material. For the first model, the decomposition rate for litter type $i$ can be derived from equation \@ref(eq:eq-dd-rate-differences-2):
 
 \begin{equation}
 k_{0,i} = -\log\left( \frac{m_{ij}(t + n)}{m_{ij}(t_0) \exp(\sum_{z = 1}^{n} f_j(t_0 + z))} \right) = -\log\left( \frac{1 - \gamma_{ij}(t + n)}{\exp(\sum_{z = 1}^{n} f_j(t_0 + z))} \right),
@@ -463,7 +267,7 @@ k_{0,1} - k_{0,2} &=& \log\left( \frac{1 - \gamma_{2j}(t)}{\exp(\sum_{z = 1}^{n}
 (\#eq:eq-dd-rate-differences-8)
 \end{equation}
 
-For the second model, the decomposition rate for litter type $i$ can be derived from eq. \@ref(eq:eq-dd-rate-differences-6):
+For the second model, the decomposition rate for litter type $i$ can be derived from equation \@ref(eq:eq-dd-rate-differences-6):
 
 \begin{equation}
 \begin{aligned}
@@ -482,26 +286,6 @@ The ratio of the decomposition rates of both litter types under optimal environm
 \end{aligned}
 (\#eq:eq-dd-rate-differences-10)
 \end{equation}
-
-
-
-
-# Age-depth-models for peat cores {#dd-sup-age-depth-model}
-
-```{r, results='asis'}
-tar_load(dd_plot_21)
-tar_load(dd_rbacon_csv)
-target_core_label <- stringr::str_extract(names(dd_rbacon_csv), pattern = "(MH1|MK1|OD2)")
-
-for(i in seq_along(dd_plot_21)) {
-  cat(paste0('(ref:dd-plot-21-', i, '-caption) rbacon Age-depth model for core ', target_core_label[[i]], '.\n\n'))
-}
-```
-
-
-```{r dd-plot-21, fig.cap=paste0('(ref:dd-plot-21-', seq_along(dd_plot_21), '-caption)'), out.width='100%'}
-knitr::include_graphics(dd_plot_21)
-```
 
 
 # References {-}
