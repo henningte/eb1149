@@ -50,7 +50,7 @@ availability:
   #data: |
   #  use this to add a statement when having only data sets available
   codedata: |
-    Peat data are available from the pmird database [@Teickner.2025c]. Litter data are available from the pmird database (undecomposed litter, data from @Reuter.2019 and @Reuter.2019a), and @Arsenault.2024b (all data except spectra, which are available from [---todo:ref data and code repo]). The code to reproduce this manuscript and the mid-infrared spectra for samples in @Arsenault.2024b are available from ... [---todo:ref]. An R-package to estimate the mixing model for peat samples is available from @Teickner.2025i.
+    Peat data are available from the pmird database [@Teickner.2025c]. Litter data are available from the pmird database (undecomposed litter, data from @Reuter.2019 and @Reuter.2019a), and @Arsenault.2024b (all data except spectra, which are available from @Teickner.2025n). The code to reproduce this manuscript and the mid-infrared spectra for samples in @Arsenault.2024b are available from @Teickner.2025n. An R-package to estimate the mixing model for peat samples is available from @Teickner.2025i.
 #  sample: |
 #    use this section when having geoscientific samples available
 # videosupplement: |
