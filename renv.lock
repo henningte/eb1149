@@ -35,6 +35,14 @@
       "Hash": "b2866e62bab9378c3cc9476a1954226b",
       "Requirements": []
     },
+    "IntCal": {
+      "Package": "IntCal",
+      "Version": "0.3.1",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Hash": "43e093dd1aa6f5535247ce8dd772b043",
+      "Requirements": []
+    },
     "MASS": {
       "Package": "MASS",
       "Version": "7.3-58.4",
@@ -96,10 +104,10 @@
     },
     "Rcpp": {
       "Package": "Rcpp",
-      "Version": "1.0.10",
+      "Version": "1.1.0",
       "Source": "Repository",
-      "Repository": "RSPM",
-      "Hash": "e749cae40fa9ef469b6050959517453c",
+      "Repository": "CRAN",
+      "Hash": "0d3d8867aa41b0d9ad113b50c169ecb2",
       "Requirements": []
     },
     "RcppEigen": {
@@ -382,6 +390,26 @@
       "Repository": "RSPM",
       "Hash": "89e6d8219950eac806ae0c489052048a",
       "Requirements": []
+    },
+    "cmdstanr": {
+      "Package": "cmdstanr",
+      "Version": "0.9.0",
+      "Source": "Repository",
+      "Repository": "https://stan-dev.r-universe.dev",
+      "RemoteUrl": "https://github.com/stan-dev/cmdstanr",
+      "RemoteRef": "v0.9.0",
+      "RemoteSha": "da99e2ba954658bdad63bffb738c4444c33a4e0e",
+      "Hash": "28014cd2c0557d8705f0bad63861a7bb",
+      "Requirements": [
+        "R6",
+        "checkmate",
+        "data.table",
+        "jsonlite",
+        "posterior",
+        "processx",
+        "rlang",
+        "withr"
+      ]
     },
     "coda": {
       "Package": "coda",
@@ -961,10 +989,16 @@
     },
     "irpeat": {
       "Package": "irpeat",
-      "Version": "0.1.0.9000",
-      "Source": "unknown",
+      "Version": "0.3.0",
+      "Source": "GitHub",
       "Remotes": "henningte/ir, henningte/elco",
-      "Hash": "57a30b9c6de158026b2642a3423bbc9b",
+      "RemoteType": "github",
+      "RemoteHost": "api.github.com",
+      "RemoteRepo": "irpeat",
+      "RemoteUsername": "henningte",
+      "RemoteRef": "HEAD",
+      "RemoteSha": "44e8164cb5047339e7578bae8d132c968d6e728f",
+      "Hash": "5d797a5264f07222959411739752d585",
       "Requirements": [
         "Rdpack",
         "dplyr",
@@ -976,6 +1010,15 @@
         "purrr",
         "quantities",
         "rlang"
+      ]
+    },
+    "irpeatmodels": {
+      "Package": "irpeatmodels",
+      "Version": "0.0.0.9000",
+      "Source": "unknown",
+      "Hash": "1a3fffd41036bea572a4deb703779872",
+      "Requirements": [
+        "lifecycle"
       ]
     },
     "isoband": {
@@ -1155,6 +1198,14 @@
       "Source": "Repository",
       "Repository": "RSPM",
       "Hash": "7ce2733a9826b3aeb1775d56fd305472",
+      "Requirements": []
+    },
+    "maps": {
+      "Package": "maps",
+      "Version": "3.4.2.1",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Hash": "354a8094c634031421eeb5103f2e1f80",
       "Requirements": []
     },
     "markdown": {
@@ -1424,6 +1475,14 @@
         "vctrs"
       ]
     },
+    "pracma": {
+      "Package": "pracma",
+      "Version": "2.4.4",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Hash": "44bc172d47d1ea0a638d9f299e321203",
+      "Requirements": []
+    },
     "praise": {
       "Package": "praise",
       "Version": "1.0.0",
@@ -1516,6 +1575,20 @@
       "Hash": "5e3c5dc0b071b21fa128676560dbe94d",
       "Requirements": []
     },
+    "rbacon": {
+      "Package": "rbacon",
+      "Version": "3.4.2",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Hash": "f8cbfc1bb34da56e97db43d16e7f36f2",
+      "Requirements": [
+        "Rcpp",
+        "coda",
+        "data.table",
+        "rice",
+        "rintcal"
+      ]
+    },
     "rbibutils": {
       "Package": "rbibutils",
       "Version": "2.3",
@@ -1552,6 +1625,30 @@
         "Rcpp",
         "plyr",
         "stringr"
+      ]
+    },
+    "rice": {
+      "Package": "rice",
+      "Version": "1.1.1",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Hash": "5b75d8f065755c3b022dd1071189c44e",
+      "Requirements": [
+        "ggplot2",
+        "maps",
+        "rintcal",
+        "rlang"
+      ]
+    },
+    "rintcal": {
+      "Package": "rintcal",
+      "Version": "1.1.3",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Hash": "e068e99c980da096e982924d5f61ad64",
+      "Requirements": [
+        "data.table",
+        "jsonlite"
       ]
     },
     "rlang": {
@@ -1628,6 +1725,26 @@
       "Repository": "RSPM",
       "Hash": "690bd2acc42a9166ce34845884459320",
       "Requirements": []
+    },
+    "rticles": {
+      "Package": "rticles",
+      "Version": "0.27.10",
+      "Source": "GitHub",
+      "RemoteType": "github",
+      "RemoteHost": "api.github.com",
+      "RemoteRepo": "rticles",
+      "RemoteUsername": "rstudio",
+      "RemoteRef": "HEAD",
+      "RemoteSha": "91690a1544f128f758a1ee62b638b2d46981bb52",
+      "Hash": "69c864654908dc56b5fc90259c6f9e79",
+      "Requirements": [
+        "knitr",
+        "lifecycle",
+        "rmarkdown",
+        "tinytex",
+        "xfun",
+        "yaml"
+      ]
     },
     "sass": {
       "Package": "sass",
