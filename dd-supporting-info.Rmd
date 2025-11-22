@@ -53,14 +53,15 @@ keywords:
 #- superPAC
 
 bibliography: '`r targets::tar_read(dd_references_file)`'
-#biblio-style: "naturemag-doi"
+biblio-style: copernicus
 # bibstyle options spbasic(default), spphys, spmpsci
-csl: copernicus-publications.csl
+# csl: copernicus-publications.csl
 output: 
   bookdown::pdf_document2:
     toc: true
     keep_tex: true
     number_sections: true
+    citation_package: natbib
 fontsize: 12pt
 link-citations: true
 header-includes:
